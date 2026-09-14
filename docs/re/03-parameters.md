@@ -41,9 +41,10 @@ A long message on channel `0x05`. The device echoes the same payload back.
 | `7D` | Attack | 0–127 |
 | `7E` | Hold | 1–100 |
 | `7F` | Release | 0–127 |
-| `8A` | Groove | 0 = Off, 1–8 |
-| `8B` | Rate | signed −7..7; the default "8" is 0 |
-| `8C` | Humanize | 0 = Off, 1–3 |
+| `89` | Key _(?)_ | 0 = none, 1–24 Camelot order (see "Computed on the host") |
+| `8A` | Groove | 0 Off, 1–8 = 8beat <, 8beat <<, 8beat >, 8beat >>, 16beat <, 16beat <<, 16beat >, 16beat >> |
+| `8B` | Rate | signed −7..7, shown as 1–15 (0 shows as 8) |
+| `8C` | Humanize | 0 Off, 1 Low, 2 Med, 3 High |
 | `8D`–`9C` | Chop points 1–16 | sample frame, −1 = unused. Adding or removing a chop rewrites all 16; dragging a point resends only that one |
 
 **Flags in `70`:**
@@ -157,12 +158,50 @@ The app then re-reads all pad blocks, project names and project settings, and re
 
 ## Computed on the host, not the device
 
-| Feature | How it works |
-|---|---|
-| Analyze BPM | read the SMP through the file API, detect tempo, set `6F`. On B1 (a 90 BPM, 16-beat loop) the app's detector set 172.30 |
-| Set BPM by St/End | compute BPM from the Start/End length, set `6F`. On the same loop the app set 180.00 (32 beats over 10.667 s) |
-| Key detection | host-side; the app formats keys as name suffixes such as `-Ab min` / `-C  maj` (note padded to 2 characters) |
-| Import WAV | convert to 48 kHz / 16-bit big-endian, write the SMP (see 02-files.md), send the pad block |
+**Analyze BPM** (confirmed in the app's code unless noted):
+- **Input:** the whole sample (not Start–End), read through the file API. Stereo is mixed
+  to mono as (L + R) / 2. No resampling; at most about 327 s is used.
+- **Range:** from the device's "BPM detect range" setting. Which message carries that
+  setting is not yet known.
+
+  | Setting | Range |
+  |---|---|
+  | 0 | 99–199 |
+  | 1 | 79–159 |
+  | 2 | 69–139 |
+  | 3 | 49–99 |
+  | other | 75–150 |
+
+  The detected tempo is doubled or halved until it is above the minimum and at most the
+  maximum.
+- **Result:** stored in `6F` as round(BPM × 10) × 10, i.e. 0.1 BPM steps; nothing else is
+  written. Example: B1, a 90 BPM loop, got 172.30, consistent with range 0.
+- **Failure:** a zero result shows "BPM Detect Error".
+
+**Set BPM by St/End:**
+- **Inputs:** len = End − Start in frames; T = the pad's current BPM × 100, or 9600 if it
+  is 0. The candidate tempo for b beats is BPM × 100 = floor(b × 288,000,000 / len).
+- **Normal case:** starting at 4 beats, step 4 beats at a time until the candidate reaches
+  T. Take whichever of the last candidate below T and the first at or above T is closer;
+  a tie goes to fewer beats.
+- **Short regions:** if 4 beats is already at or above T, the candidates are powers of two
+  from 1/64 to 4 beats. An upper choice above 300.00 BPM is rejected.
+- **Result:** truncated, stored in `6F`.
+- **Example:** B1 (512,000 frames) at 172.30 → 32 beats = 180.00, which the app set.
+
+**Auto Detect BPM** is a toggle in the import dialog, initialised from the same device
+message as the range. After each import to a pad it runs Analyze BPM, stores `6F`, and
+re-reads the pad block.
+
+**Key:** the app has no key detector. Pad parameter `89` holds a key the app can display.
+It is probably set on the device side (the device's error list has "KEY Detect Error"):
+- 0 = none.
+- 1–24 = Camelot order, minor ("A") before major ("B"): 1 = 1A A♭ min, 2 = 1B B maj,
+  3 = 2A E♭ min, … 7 = 4A F min, … 16 = 8B C maj, … 24 = 12B E maj.
+- The app's Key control appears unused. `89` has not been exercised on the device.
+
+**Import audio:** convert to 48 kHz 16-bit big-endian, write the SMP (02-files.md), send
+the pad block.
 
 ## Project commands
 
@@ -186,7 +225,7 @@ project 12:
 The project name comes along inside `PADCONF.BIN` (slot 12 became `PROJECT_06`).
 
 **The target must be the current project.** `92` acts on the current project, and
-`B1 proj` then reloads the given project. When SPMK2Linux ran the sequence for project 12
+`B1 proj` then reloads the given project. When SparkyMK2 ran the sequence for project 12
 while project 6 was current, `92` erased project 6 and the files written to project 12
 were fine. Project 6 was recovered from a backup taken just before.
 

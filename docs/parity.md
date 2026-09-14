@@ -28,7 +28,8 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 - MKII EXIT
 - Restore a project from a backup folder (Import to MKII, full)
 - Offline `PADCONF.BIN` reader (project backups)
-- Tempo and key detection (host-side), optionally storing the BPM on the pad
+- Analyze BPM and Set BPM by St/End (host-side, app rules), Auto Detect BPM on import
+- Key detection (an extra; the official app has none)
 
 ## Connection
 
@@ -70,7 +71,9 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 | Import to MKII: restore a project from a PC export | ✅ full restore (`92` erases the current project, file copy, `B1` reload); partial variants (Samples Bank, Patterns Bank) not captured |
 | Import audio by drag and drop onto a pad | ✅ |
 | AIFF, MP3, FLAC decoding; sample-rate conversion | ✅ host-side (symphonia, rubato) |
-| Auto Detect BPM; key detect | ✅ host-side (`sp404-dsp`): own tempo and key detectors; results can differ from the app's bundled detector |
+| Auto Detect BPM | ✅ host-side (`sp404-dsp`, `import --detect-bpm`), same range presets, folding and rounding as the app; the detector itself is our own |
+| BPM detect range setting (from the device) | 🟡 presets known; the device message that carries the setting is not identified |
+| Key | 🟡 the app has no detector: pad parameter `89` (Camelot index) is set on the device side; SparkyMK2 adds its own key detection as an extra |
 | Export sample as WAV | ✅ |
 | Export pattern as SMF | ✅ host-side conversion |
 | Export pattern as Bounce | ✅ `B8 1003`; device writes the WAV back over the file API |

@@ -32,19 +32,24 @@ struct Cli {
 
 #[derive(clap::Args, Clone, Copy)]
 struct BpmRange {
-    /// Lowest tempo to report; results are folded into the range.
-    #[arg(long, default_value_t = 70.0)]
-    min_bpm: f32,
-    /// Highest tempo to report.
-    #[arg(long, default_value_t = 140.0)]
-    max_bpm: f32,
+    /// Detection range preset, as the device's BPM detect range setting:
+    /// 0 = 99–199, 1 = 79–159, 2 = 69–139, 3 = 49–99, 4 = 75–150.
+    #[arg(long, default_value_t = 0)]
+    bpm_range: u8,
+    /// Override the lowest tempo (results are folded into the range).
+    #[arg(long)]
+    min_bpm: Option<f32>,
+    /// Override the highest tempo.
+    #[arg(long)]
+    max_bpm: Option<f32>,
 }
 
 impl From<BpmRange> for TempoRange {
     fn from(r: BpmRange) -> Self {
+        let preset = TempoRange::device_preset(r.bpm_range);
         TempoRange {
-            min: r.min_bpm,
-            max: r.max_bpm,
+            min: r.min_bpm.unwrap_or(preset.min),
+            max: r.max_bpm.unwrap_or(preset.max),
         }
     }
 }
@@ -121,14 +126,20 @@ enum Command {
         #[command(flatten)]
         range: BpmRange,
     },
-    /// Detect tempo and key of a pad's sample (Start–End), optionally storing the BPM.
+    /// Detect tempo and key of a pad's sample, optionally storing the BPM.
     AnalyzePad {
         pad: PadIndex,
         #[command(flatten)]
         range: BpmRange,
-        /// Write the detected BPM to the pad (parameter `bpm`).
+        /// Analyse only the Start–End region (the app analyses the whole sample).
+        #[arg(long)]
+        start_end: bool,
+        /// Store the detected BPM on the pad, like the app's Analyze BPM.
         #[arg(long)]
         set_bpm: bool,
+        /// Store the BPM computed from the Start–End length, like "Set BPM by St/End".
+        #[arg(long, conflicts_with = "set_bpm")]
+        set_bpm_by_length: bool,
     },
     /// Show a local PADCONF.BIN (project settings and pads) from a project backup.
     Padconf { file: PathBuf },
@@ -174,6 +185,11 @@ enum Command {
         /// Sample name (default: file stem).
         #[arg(long)]
         name: Option<String>,
+        /// Detect the tempo after importing and store it (the app's "Auto Detect BPM").
+        #[arg(long)]
+        detect_bpm: bool,
+        #[command(flatten)]
+        range: BpmRange,
     },
     /// Delete a pad's sample.
     DeleteSample { pad: PadIndex },
@@ -279,7 +295,16 @@ fn main() -> Result<()> {
             file,
             project,
             name,
-        } => import(&dev, pad, &file, project, name),
+            detect_bpm,
+            range,
+        } => import(
+            &dev,
+            pad,
+            &file,
+            project,
+            name,
+            detect_bpm.then(|| range.into()),
+        ),
         Command::DeleteSample { pad } => Ok(dev.pad_op(PadOp::Delete, pad)?),
         Command::Truncate { pad } => Ok(dev.pad_op(PadOp::Truncate, pad)?),
         Command::Normalize { pad } => Ok(dev.pad_op(PadOp::Normalize, pad)?),
@@ -291,8 +316,17 @@ fn main() -> Result<()> {
         Command::AnalyzePad {
             pad,
             range,
+            start_end,
             set_bpm,
-        } => analyze_pad(&dev, pad, range.into(), set_bpm),
+            set_bpm_by_length,
+        } => analyze_pad(
+            &dev,
+            pad,
+            range.into(),
+            start_end,
+            set_bpm,
+            set_bpm_by_length,
+        ),
         Command::ExportPattern {
             pattern,
             out,
@@ -720,23 +754,22 @@ fn multipad(dev: &Device, pattern: PadIndex, dir: &Path) -> Result<()> {
 fn report_analysis(mono: &[f32], range: TempoRange) -> Option<Tempo> {
     let seconds = mono.len() as f64 / f64::from(smp::SAMPLE_RATE);
     println!("length        {seconds:.3} s");
+    println!("range         {:.0}–{:.0} BPM", range.min, range.max);
     let tempo = sp404_dsp::tempo::detect(mono, smp::SAMPLE_RATE, range);
     match tempo {
         Some(t) => println!(
-            "tempo         {:.2} BPM (confidence {:.2})",
-            t.bpm, t.confidence
+            "tempo         {:.1} BPM (confidence {:.2})",
+            f64::from(t.bpm_x100()) / 100.0,
+            t.confidence
         ),
         None => println!("tempo         not detected"),
     }
-    if let Some(bpm) = sp404_dsp::tempo::from_length(seconds, range) {
-        println!("by length     {bpm:.2} BPM (whole bars)");
-    }
     match sp404_dsp::key::detect(mono, smp::SAMPLE_RATE) {
         Some(k) => println!(
-            "key           {} (confidence {:.2}), name suffix {:?}",
+            "key           {} ({}, confidence {:.2})",
             k.name(),
-            k.confidence,
-            k.suffix()
+            k.camelot(),
+            k.confidence
         ),
         None => println!("key           not detected"),
     }
@@ -751,11 +784,22 @@ fn analyze_file(file: &Path, range: TempoRange) -> Result<()> {
         load_audio(file)?
     };
     let mono = sp404_dsp::mono_from_i16(&sample.samples, usize::from(sample.channels));
-    report_analysis(&mono, range);
+    let tempo = report_analysis(&mono, range);
+    let current = tempo.map_or(0, |t| t.bpm_x100());
+    if let Some(bpm) = sp404_dsp::tempo::bpm_from_length(sample.frames() as u32, current) {
+        println!("by length     {:.2} BPM", f64::from(bpm) / 100.0);
+    }
     Ok(())
 }
 
-fn analyze_pad(dev: &Device, pad: PadIndex, range: TempoRange, set_bpm: bool) -> Result<()> {
+fn analyze_pad(
+    dev: &Device,
+    pad: PadIndex,
+    range: TempoRange,
+    start_end: bool,
+    set_bpm: bool,
+    set_bpm_by_length: bool,
+) -> Result<()> {
     let block = dev.pad_block(pad)?;
     if !block.has_sample() {
         bail!("{pad} is empty");
@@ -764,7 +808,6 @@ fn analyze_pad(dev: &Device, pad: PadIndex, range: TempoRange, set_bpm: bool) ->
     let bytes = dev.read_file(&pad.sample_path(project))?;
     let sample = Sample::from_smp(&bytes)?;
     let channels = usize::from(sample.channels);
-    // Analyse the Start–End region, as that is what the pad plays.
     let (start, end) = block.start_end_bytes();
     let to_index = |offset: u32| {
         (offset.saturating_sub(smp::HEADER_LEN as u32) as usize / 2).min(sample.samples.len())
@@ -772,12 +815,29 @@ fn analyze_pad(dev: &Device, pad: PadIndex, range: TempoRange, set_bpm: bool) ->
     let (from, to) = (to_index(start), to_index(end));
     let region = &sample.samples[from - from % channels..to - to % channels];
     println!("{pad}: {}", block.name());
-    let mono = sp404_dsp::mono_from_i16(region, channels);
+    let analysed = if start_end { region } else { &sample.samples };
+    let mono = sp404_dsp::mono_from_i16(analysed, channels);
     let tempo = report_analysis(&mono, range);
-    if set_bpm {
-        let tempo = tempo.context("no tempo to store")?;
-        let value = (tempo.bpm * 100.0).round() as i32;
-        dev.set_param(0x6F, Target::Pad(pad), value.clamp(4000, 20000))?;
+    let current = block.param(0x6F).unwrap_or(0).max(0) as u32;
+    let by_length = sp404_dsp::tempo::bpm_from_length((region.len() / channels) as u32, current);
+    if let Some(bpm) = by_length {
+        println!(
+            "by length     {:.2} BPM (Start–End, nearest to the pad's {:.2})",
+            f64::from(bpm) / 100.0,
+            f64::from(current) / 100.0
+        );
+    }
+    let store = if set_bpm {
+        Some(tempo.context("no tempo detected to store")?.bpm_x100())
+    } else if set_bpm_by_length {
+        Some(by_length.context("region is empty")?)
+    } else {
+        None
+    };
+    if let Some(value) = store {
+        // Parameter range 40.00–200.00 BPM.
+        let value = (value as i32).clamp(4000, 20000);
+        dev.set_param(0x6F, Target::Pad(pad), value)?;
         println!("stored bpm {:.2} on {pad}", f64::from(value) / 100.0);
     }
     Ok(())
@@ -927,6 +987,7 @@ fn import(
     input: &Path,
     project: Option<u8>,
     name: Option<String>,
+    detect_bpm: Option<TempoRange>,
 ) -> Result<()> {
     let sample = load_audio(input)?;
     let name = name.unwrap_or_else(|| {
@@ -942,5 +1003,16 @@ fn import(
         "{pad}: imported {} frames as {name:?} into project {project}",
         sample.frames()
     );
+    if let Some(range) = detect_bpm {
+        let mono = sp404_dsp::mono_from_i16(&sample.samples, usize::from(sample.channels));
+        match sp404_dsp::tempo::detect(&mono, smp::SAMPLE_RATE, range) {
+            Some(tempo) => {
+                let value = (tempo.bpm_x100() as i32).clamp(4000, 20000);
+                dev.set_param(0x6F, Target::Pad(pad), value)?;
+                println!("{pad}: bpm {:.2}", f64::from(value) / 100.0);
+            }
+            None => eprintln!("{pad}: no tempo detected"),
+        }
+    }
     Ok(())
 }

@@ -1,0 +1,12 @@
+# Keep LF line endings in the repository and working trees on every platform.
+* text=auto eol=lf
+
+# Windows-only helper scripts stay CRLF so PowerShell and cmd are happy.
+*.ps1 text eol=crlf
+
+*.pcap binary
+*.pcapng binary
+*.smp binary
+*.SMP binary
+*.wav binary
+*.WAV binary

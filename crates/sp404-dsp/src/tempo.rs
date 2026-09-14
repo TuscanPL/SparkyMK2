@@ -15,12 +15,24 @@ pub struct TempoRange {
     pub max: f32,
 }
 
+impl TempoRange {
+    /// The official app's ranges for the device's "BPM detect range" setting.
+    pub fn device_preset(setting: u8) -> TempoRange {
+        let (min, max) = match setting {
+            0 => (99.0, 199.0),
+            1 => (79.0, 159.0),
+            2 => (69.0, 139.0),
+            3 => (49.0, 99.0),
+            _ => (75.0, 150.0),
+        };
+        TempoRange { min, max }
+    }
+}
+
 impl Default for TempoRange {
+    /// Preset 0 (99–199), which matched the device used for testing.
     fn default() -> Self {
-        TempoRange {
-            min: 70.0,
-            max: 140.0,
-        }
+        TempoRange::device_preset(0)
     }
 }
 
@@ -29,6 +41,13 @@ pub struct Tempo {
     pub bpm: f32,
     /// Peak salience relative to the average over the range (≥ 1; higher is clearer).
     pub confidence: f32,
+}
+
+impl Tempo {
+    /// BPM × 100 for pad parameter `6F`, rounded to 0.1 BPM as the official app stores it.
+    pub fn bpm_x100(&self) -> u32 {
+        (self.bpm * 10.0).round().max(0.0) as u32 * 10
+    }
 }
 
 /// Estimate the tempo of mono audio. `None` when the audio is too short or has no onsets.
@@ -140,21 +159,59 @@ fn interpolate(values: &[f32], at: f32) -> f32 {
     }
 }
 
-/// BPM that makes `seconds` a whole number of beats, choosing the beat count
-/// (4 × a power of two) that lands inside `range`, as a loop-length based estimate.
-pub fn from_length(seconds: f64, range: TempoRange) -> Option<f64> {
-    if seconds <= 0.0 {
+/// "Set BPM by St/End": the whole-beat tempo nearest the pad's current BPM, for a region
+/// of `frames` frames at 48 kHz. `current_x100` is BPM × 100 (0 counts as 96.00). Returns
+/// BPM × 100, truncated, as the official app computes it.
+pub fn bpm_from_length(frames: u32, current_x100: u32) -> Option<u32> {
+    if frames == 0 {
         return None;
     }
-    let mut beats = 1.0f64;
-    while beats <= 4096.0 {
-        let bpm = beats * 60.0 / seconds;
-        if bpm >= f64::from(range.min) && bpm < f64::from(range.max) {
-            return Some((bpm * 100.0).round() / 100.0);
+    let target = if current_x100 == 0 {
+        9600
+    } else {
+        current_x100
+    };
+    // BPM × 100 for `num / den` beats spanning the region.
+    let candidate = |num: u64, den: u64| -> u64 { num * 288_000_000 / (den * u64::from(frames)) };
+    let pick = |below: Option<(u64, u64)>, above: Option<(u64, u64)>| -> Option<u32> {
+        // (value, beats rank); a tie goes to fewer beats, i.e. the lower value.
+        let t = u64::from(target);
+        match (below, above) {
+            (Some((b, _)), Some((a, _))) => Some(if a - t < t - b { a } else { b }),
+            (Some((b, _)), None) => Some(b),
+            (None, Some((a, _))) => Some(a),
+            (None, None) => None,
         }
-        beats *= 2.0;
+        .map(|v| v as u32)
+    };
+    if candidate(4, 1) < u64::from(target) {
+        let mut beats = 4;
+        loop {
+            let (low, high) = (candidate(beats, 1), candidate(beats + 4, 1));
+            if high >= u64::from(target) {
+                return pick(Some((low, beats)), Some((high, beats + 4)));
+            }
+            beats += 4;
+        }
     }
-    None
+    // Short regions: powers of two from 1/64 to 4 beats.
+    let (mut below, mut above) = (None, None);
+    for exp in -6i32..=2 {
+        let (num, den) = if exp < 0 {
+            (1, 1u64 << -exp)
+        } else {
+            (1u64 << exp, 1)
+        };
+        let value = candidate(num, den);
+        if value < u64::from(target) {
+            below = Some((value, num));
+        } else if above.is_none() {
+            above = Some((value, num));
+        }
+    }
+    // The app rejects an upper choice above 300.00 BPM.
+    let above = above.filter(|&(v, _)| v <= 30_000);
+    pick(below, above)
 }
 
 #[cfg(test)]
@@ -197,9 +254,9 @@ mod tests {
     #[test]
     fn finds_tempo_of_drum_loops() {
         for (bpm, range) in [
-            (90.0, TempoRange::default()),
-            (123.5, TempoRange::default()),
-            (100.0, TempoRange::default()),
+            (90.0, TempoRange::device_preset(2)),
+            (123.5, TempoRange::device_preset(2)),
+            (100.0, TempoRange::device_preset(2)),
             (
                 172.0,
                 TempoRange {
@@ -236,19 +293,30 @@ mod tests {
     }
 
     #[test]
-    fn length_based_bpm() {
-        // 512,000 frames at 48 kHz = 10.667 s: 16 beats at 90 BPM, 32 at 180.
-        let secs = 512_000.0 / 48_000.0;
-        assert_eq!(from_length(secs, TempoRange::default()), Some(90.0));
+    fn bpm_by_length_follows_app_rule() {
+        // B1: 512,000 frames. From 172.30, 32 beats (180.00) is closer than 28 (157.50).
+        assert_eq!(bpm_from_length(512_000, 17_230), Some(18_000));
+        assert_eq!(bpm_from_length(512_000, 9_000), Some(9_000));
+        // 0 counts as 96.00: 16 beats = 90.00 beats 20 beats = 112.50.
+        assert_eq!(bpm_from_length(512_000, 0), Some(9_000));
+        // A 49,153-frame hit: 4 beats is already 234.36, so try powers of two.
+        assert_eq!(bpm_from_length(49_153, 9_000), Some(11_718));
+        assert_eq!(bpm_from_length(0, 9_000), None);
+    }
+
+    #[test]
+    fn app_rounding_and_presets() {
+        let t = Tempo {
+            bpm: 172.34,
+            confidence: 2.0,
+        };
+        assert_eq!(t.bpm_x100(), 17_230);
         assert_eq!(
-            from_length(
-                secs,
-                TempoRange {
-                    min: 100.0,
-                    max: 200.0
-                }
-            ),
-            Some(180.0)
+            TempoRange::device_preset(2),
+            TempoRange {
+                min: 69.0,
+                max: 139.0
+            }
         );
     }
 }

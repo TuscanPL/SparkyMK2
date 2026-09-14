@@ -105,7 +105,7 @@ the WAV to the host** through the file API, in the reverse direction.
   `B8 pad h`, wait for `39`; finally `B8 1001`.
   - In the capture the app sent only `B8 1000` / `B8 1001`, no per-pad render. Why is not
     known.
-  - SPMK2Linux sent `B8 1000`, `B8 pad 0`, `B8 1001` for each pad of pattern A3. The device
+  - SparkyMK2 sent `B8 1000`, `B8 pad 0`, `B8 1001` for each pad of pattern A3. The device
     rendered and wrote a full-length WAV per pad (7 pads, 512,000 frames each).
 - **Keep polling during a render.** The device pauses when the host sends nothing for
   about 3.5 s: progress stopped at 22 % and no WAV followed. The app polls `FE 66 00`

@@ -58,7 +58,7 @@ The app decodes the source file itself; the device only ever receives 48 kHz 16-
 - **Accepted extensions** (from the app's file filters): `.wav .bwf`, `.aiff .aif`, `.flac`,
   and MP3.
 - **Other sample rates** are converted by the app, which shows a hint to use 48000 Hz for
-  better quality. Its converter is not specified here. SPMK2Linux uses a band-limited FFT
+  better quality. Its converter is not specified here. SparkyMK2 uses a band-limited FFT
   resampler (rubato), so the output is not expected to be bit-identical to the app's.
 - **16-bit 48 kHz sources** import bit-exact, as the app does. Deeper bit depths are
   rounded to 16 bits without dither.
@@ -66,7 +66,7 @@ The app decodes the source file itself; the device only ever receives 48 kHz 16-
   144,000 frames and 288,000 PCM bytes. Byte offsets in the pad block then advance by 2
   per frame instead of 4. The app learns each pad's channel count by reading the SMP
   headers (it rescans all 160 after every change).
-- **More than two channels:** SPMK2Linux keeps the first two. The app's behaviour is
+- **More than two channels:** SparkyMK2 keeps the first two. The app's behaviour is
   unverified.
 - **Length limits:** the app has "Too Short Sample Check" and "Too Long Sample" errors. The
   limits themselves are _TBD_.

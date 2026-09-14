@@ -15,7 +15,7 @@ const MINOR: [f32; 12] = [
     6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17,
 ];
 
-/// Pitch-class names as the official app spells them.
+/// Pitch-class names as the official app spells them in its key list.
 const NAMES: [&str; 12] = [
     "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
 ];
@@ -39,13 +39,29 @@ impl Key {
         )
     }
 
-    /// Sample-name suffix in the app's style: "-F# min", "-C  maj".
-    pub fn suffix(&self) -> String {
+    /// Position on the Camelot wheel, 1..=12 (minor keys are "A", major keys "B").
+    pub fn camelot_number(&self) -> u8 {
+        // Minor keys start at Ab (1A), major keys at B (1B); each step adds a fifth.
+        let first = if self.minor { 8 } else { 11 };
+        (0..12u8)
+            .find(|n| (first + 7 * n) % 12 == self.tonic % 12)
+            .unwrap()
+            + 1
+    }
+
+    /// "4A" for F minor, "8B" for C major.
+    pub fn camelot(&self) -> String {
         format!(
-            "-{:<2} {}",
-            NAMES[usize::from(self.tonic % 12)],
-            if self.minor { "min" } else { "maj" }
+            "{}{}",
+            self.camelot_number(),
+            if self.minor { 'A' } else { 'B' }
         )
+    }
+
+    /// Value of the device's pad key parameter (`89`): 1..=24 in Camelot order
+    /// (1 = 1A Ab minor, 2 = 1B B major, …); 0 means no key. Unverified on the device.
+    pub fn device_value(&self) -> u8 {
+        (self.camelot_number() - 1) * 2 + if self.minor { 1 } else { 2 }
     }
 }
 
@@ -215,15 +231,32 @@ mod tests {
     }
 
     #[test]
-    fn suffix_matches_app_spelling() {
+    fn camelot_positions_match_app_order() {
         let k = |tonic, minor| Key {
             tonic,
             minor,
             confidence: 1.0,
         };
-        assert_eq!(k(0, false).suffix(), "-C  maj");
-        assert_eq!(k(8, true).suffix(), "-Ab min");
-        assert_eq!(k(6, false).suffix(), "-F# maj");
+        assert_eq!(
+            (k(8, true).camelot(), k(8, true).device_value()),
+            ("1A".into(), 1)
+        );
+        assert_eq!(
+            (k(11, false).camelot(), k(11, false).device_value()),
+            ("1B".into(), 2)
+        );
+        assert_eq!(
+            (k(5, true).camelot(), k(5, true).device_value()),
+            ("4A".into(), 7)
+        );
+        assert_eq!(
+            (k(0, false).camelot(), k(0, false).device_value()),
+            ("8B".into(), 16)
+        );
+        assert_eq!(
+            (k(4, false).camelot(), k(4, false).device_value()),
+            ("12B".into(), 24)
+        );
     }
 
     #[test]
