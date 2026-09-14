@@ -23,6 +23,8 @@ pub enum FormatError {
     SizeMismatch { declared: u64, actual: u64 },
     #[error("SMP header digest does not match its fields")]
     DigestMismatch,
+    #[error("unsupported PADCONF.BIN version {0}")]
+    UnsupportedPadconf(u8),
     #[error("invalid pattern file: {0}")]
     BadPattern(&'static str),
     #[error("no audio track found")]

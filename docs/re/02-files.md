@@ -8,7 +8,7 @@ hexadecimal. Integers in these files are **big-endian** unless noted.
 ```
 ROLAND/SP-404MKII/
   PROJECT_NN/                  NN = 01..16
-    PADCONF.BIN                pad and project parameters (52000 bytes)
+    PADCONF.BIN                pad and project parameters (52000 bytes; 31488 in version 2)
     SMPL/BANKb-pp.SMP          b = 1..10 (A..J), pp = 01..16
     PTN/PTNnnnnn.BIN           nnnnn = 00001..00160, pattern data
     PTN/PATTERNCHAIN_00.CHN    pattern chains (XML)
@@ -73,7 +73,7 @@ The app decodes the source file itself; the device only ever receives 48 kHz 16-
 
 ## `PADCONF.BIN`
 
-52000 bytes. It holds the same structures the device sends over channel 5: the project
+52000 bytes (version 3). It holds the same structures the device sends over channel 5: the project
 settings (`7D`) and all 160 pad blocks (`1E`). Integers are stored as **big-endian u32
 words**, where the live replies use little-endian. Field meanings are in
 [03-parameters.md](03-parameters.md) ("Pad block", "Project settings").
@@ -82,7 +82,7 @@ words**, where the live replies use little-endian. Field meanings are in
 |---|---|---|
 | `0000` | 4 | `"RFPD"` |
 | `0004` | 4 | `0xA0`, offset of the pad records |
-| `0008` | 4 | `03 00 00 00` _(version?)_ |
+| `0008` | 4 | `03 00 00 00`, version (`02` in older files, below) |
 | `000C` | 4 | `0x7A80`, size of the pad records plus the name table |
 | `0010` | 112 | project settings: the 28 words of the `7D` reply |
 | `0080` | 32 | project name |
@@ -96,6 +96,24 @@ words**, where the live replies use little-endian. Field meanings are in
 - **It is a persisted snapshot and can lag the live state.** After a pad was deleted, the
   file still held the pad's old truncated sample, name and chop point. Read live state
   over channel 5; treat this file as the backup format.
+
+**Version 2** (31488 bytes) comes from older firmware; project 1 on the test device, an
+unnamed slot with 144 samples, still had one. It has no project name and no chop section,
+so everything after the settings moves up by 32 bytes:
+
+| Offset | Size | Content |
+|---|---|---|
+| `0000` | 16 | header as above, version byte `02`; `0004` still says `0xA0` |
+| `0010` | 112 | project settings, same 28 words |
+| `0080` | 160 × 172 | pad records |
+| `6C00` | 160 × 24 | pad names; the file ends here |
+
+- **Verified:** the record sizes of all 160 pads match the SMP files. The backup was
+  restored into a scratch project and compared with the live replies: all 28 settings
+  words and the 144 used pads match, except the unstored fields above. The device showed
+  the project unnamed and kept the version 2 file as it was.
+- **Empty pads:** fields 9 and 17 differed on the 16 empty pads (file 9600 and 0, live
+  9000 and 1).
 
 ## `PTNnnnnn.BIN` and `PATTERNCHAIN_00.CHN`
 
