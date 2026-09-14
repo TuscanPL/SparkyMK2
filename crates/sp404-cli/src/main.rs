@@ -180,6 +180,7 @@ enum Command {
     Import {
         pad: PadIndex,
         file: PathBuf,
+        /// Project number; must be the current project (default: current).
         #[arg(long)]
         project: Option<u8>,
         /// Sample name (default: file stem).
@@ -235,6 +236,12 @@ enum Command {
 }
 
 fn main() -> Result<()> {
+    // Rust ignores SIGPIPE, so printing into a closed pipe (`sp404 pads | head`) panics.
+    // Restore the default: end quietly, like other command-line tools.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
     let cli = Cli::parse();
     let level = match cli.verbose {
         0 => log::LevelFilter::Warn,

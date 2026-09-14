@@ -647,6 +647,7 @@ dependencies = [
  "anyhow",
  "clap",
  "env_logger",
+ "libc",
  "log",
  "sp404-device",
  "sp404-dsp",

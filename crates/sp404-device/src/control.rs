@@ -304,16 +304,41 @@ impl Device {
             )));
         }
         let what = format!("init {scope:?}");
-        let reply = self.transact(
+        // The device answers `12 status` and announces the reloaded project with `1A proj`,
+        // in either order (Patterns Bank sends the notification first). Wait for both, so
+        // the next command doesn't reach the device while it is still reloading.
+        let mut status = None;
+        let mut reloaded = false;
+        let mut error = None;
+        let waited = self.transact(
             &short(&control::init_project(scope)),
             &what,
             Duration::from_secs(15),
-            |m| is_channel(m, Channel::Control) && m.payload().first() == Some(&reply::INIT),
-        )?;
-        if let Some(&code) = reply.payload().get(1).filter(|&&c| c != 0) {
-            return Err(refused(&what, code));
+            |m| {
+                if !is_channel(m, Channel::Control) {
+                    return false;
+                }
+                match m.payload() {
+                    [reply::INIT, code, ..] => status = Some(*code),
+                    [reply::CHANGED, p, _, ..] => reloaded |= *p == project,
+                    payload => error = error.or(control::parse_error(payload)),
+                }
+                error.is_some() || status.is_some_and(|c| c != 0) || (status.is_some() && reloaded)
+            },
+        );
+        if let Some(code) = error {
+            return Err(device_error(&what, code));
         }
-        self.check_device_error(&what)
+        match (waited, status) {
+            (_, Some(code)) if code != 0 => Err(refused(&what, code)),
+            (Ok(_), _) => Ok(()),
+            // Acknowledged, but the reload notification never came: the erase went through.
+            (Err(Error::Timeout(_)), Some(_)) => {
+                log::warn!("{what}: no reload notification from the device");
+                Ok(())
+            }
+            (Err(e), _) => Err(e),
+        }
     }
 
     /// Truncate, normalize or delete a pad's sample on the device.
@@ -399,8 +424,16 @@ impl Device {
     }
 
     /// Write a complete SMP file to a pad and point the pad at it, following the official
-    /// app's import sequence. `project` is 1-based (the `PROJECT_NN` folder).
+    /// app's import sequence. `project` is 1-based (the `PROJECT_NN` folder) and **must be
+    /// the current project**: the pad block is written to the current project, so importing
+    /// into another one would change a current pad while its file went elsewhere.
     pub fn import_smp(&self, project: u8, pad: PadIndex, smp: &[u8], name: &str) -> Result<()> {
+        let current = self.current_project()? + 1;
+        if current != project {
+            return Err(Error::Refused(format!(
+                "import into project {project}: project {current} is current (select it first)"
+            )));
+        }
         let header_len = control::SMP_HEADER_LEN as usize;
         if smp.len() < header_len {
             return Err(Error::Unexpected("SMP shorter than its header".into()));
