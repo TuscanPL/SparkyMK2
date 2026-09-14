@@ -14,7 +14,8 @@ core with a command-line tool (`sp404`) talks to real hardware.
 
 - Verified against an SP-404MKII on firmware **5.52**, driven from Windows.
 - The Linux build uses the same code, but hasn't been tested against the device yet.
-- There is no GUI yet; that comes next. A plugin version comes later.
+- An early desktop app shows the device's samples, patterns and settings. It can't edit
+  yet. A plugin version comes later.
 
 Feature-by-feature progress against the official app is tracked in
 [docs/parity.md](docs/parity.md).
@@ -65,6 +66,34 @@ cargo build --release
 ```
 
 The binary is `target/release/sp404`.
+
+### Desktop app
+
+The app in `app/` uses [Tauri](https://tauri.app) with a Vue frontend. Besides Rust it
+needs Node.js 20.19 or newer and WebKitGTK 4.1:
+
+```bash
+# Arch / CachyOS / Manjaro
+sudo pacman -S --needed webkit2gtk-4.1
+
+# Debian / Ubuntu
+sudo apt install libwebkit2gtk-4.1-dev
+
+# Fedora
+sudo dnf install webkit2gtk4.1-devel
+```
+
+If a build step still reports a missing library, see Tauri's
+[Linux prerequisites](https://tauri.app/start/prerequisites/#linux).
+
+```bash
+cd app
+npm install
+npm run tauri dev      # run with live reload
+npm run tauri build    # build a release binary and packages
+```
+
+`cargo build` in the repository root builds only the command-line tool.
 
 ### Linux setup
 
@@ -132,6 +161,7 @@ crates/sp404-formats   SMP samples, PADCONF.BIN, patterns, MIDI export, audio im
 crates/sp404-device    USB serial connection (0582:02E7, 921600 baud)
 crates/sp404-dsp       tempo and key detection
 crates/sp404-cli       the `sp404` command-line tool
+app/                   desktop app: Vue frontend, Tauri backend in app/src-tauri
 docs/re/               protocol and file-format specification
 docs/parity.md         feature checklist against the official app
 tools/                 Windows capture and analysis scripts used for reverse engineering

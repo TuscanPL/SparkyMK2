@@ -6,6 +6,11 @@ captures/
 # Rust
 target/
 
+# Desktop app
+app/node_modules/
+app/dist/
+app/src-tauri/gen/schemas/
+
 # Ghidra projects
 *.gpr
 *.rep/

@@ -1,0 +1,24 @@
+[package]
+name = "sparkymk2"
+description = "Desktop editor for the Roland SP-404MKII"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+# Separate name so the library doesn't clash with the binary (cargo#8519).
+name = "sparkymk2_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+sp404-proto.workspace = true
+sp404-formats.workspace = true
+sp404-device.workspace = true
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log.workspace = true

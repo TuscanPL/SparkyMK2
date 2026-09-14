@@ -6,6 +6,15 @@ members = [
     "crates/sp404-device",
     "crates/sp404-dsp",
     "crates/sp404-cli",
+    "app/src-tauri",
+]
+# The desktop app builds through `npm run tauri`; plain `cargo build` stays CLI-only.
+default-members = [
+    "crates/sp404-proto",
+    "crates/sp404-formats",
+    "crates/sp404-device",
+    "crates/sp404-dsp",
+    "crates/sp404-cli",
 ]
 
 [workspace.package]
