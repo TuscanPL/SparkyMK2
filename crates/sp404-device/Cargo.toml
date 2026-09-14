@@ -1,0 +1,14 @@
+[package]
+name = "sp404-device"
+description = "Serial connection to a Roland SP-404MKII: file API, parameters, sample import"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+sp404-proto.workspace = true
+thiserror.workspace = true
+log.workspace = true
+# Default features include libudev, needed on Linux to read USB vid/pid for port discovery.
+serialport = "4"

@@ -1,0 +1,21 @@
+[package]
+name = "sp404-cli"
+description = "Command-line tool for the Roland SP-404MKII"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "sp404"
+path = "src/main.rs"
+
+[dependencies]
+sp404-proto.workspace = true
+sp404-formats.workspace = true
+sp404-device.workspace = true
+sp404-dsp.workspace = true
+anyhow.workspace = true
+log.workspace = true
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.11"

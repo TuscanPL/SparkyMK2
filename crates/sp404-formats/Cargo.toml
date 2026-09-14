@@ -1,0 +1,23 @@
+[package]
+name = "sp404-formats"
+description = "SP-404MKII card file formats: SMP samples, PADCONF, audio decoding and WAV export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+sp404-proto.workspace = true
+thiserror.workspace = true
+md-5 = "0.10"
+hound = "3.5"
+rubato = { version = "4", default-features = false, features = ["fft_resampler"] }
+audioadapter-buffers = "4"
+symphonia = { version = "0.6", default-features = false, features = [
+    "wav",
+    "aiff",
+    "pcm",
+    "adpcm",
+    "flac",
+    "mp3",
+] }

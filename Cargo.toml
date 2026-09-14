@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/sp404-proto",
+    "crates/sp404-formats",
+    "crates/sp404-device",
+    "crates/sp404-dsp",
+    "crates/sp404-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+
+[workspace.dependencies]
+sp404-proto = { path = "crates/sp404-proto" }
+sp404-formats = { path = "crates/sp404-formats" }
+sp404-device = { path = "crates/sp404-device" }
+sp404-dsp = { path = "crates/sp404-dsp" }
+thiserror = "2"
+anyhow = "1"
+log = "0.4"

@@ -1,0 +1,10 @@
+[package]
+name = "sp404-dsp"
+description = "Host-side audio analysis for SP-404MKII samples: tempo and key detection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+realfft = "3.5"

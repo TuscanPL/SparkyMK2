@@ -1,0 +1,14 @@
+# Raw USB captures and dumps (may contain user samples)
+captures/
+*.pcap
+*.pcapng
+
+# Rust
+target/
+
+# Ghidra projects
+*.gpr
+*.rep/
+
+# Python
+__pycache__/

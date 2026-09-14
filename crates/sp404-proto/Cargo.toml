@@ -1,0 +1,10 @@
+[package]
+name = "sp404-proto"
+description = "Sans-IO implementation of the Roland SP-404MKII serial link protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
