@@ -1,12 +1,16 @@
 # Maintainer: TuscanPL <okarinpl@gmail.com>
 #
-# Builds the desktop app from this repository's checkout:
-#   cd packaging/arch
-#   makepkg -f
-#   sudo pacman -U sparkymk2-*.pkg.tar.zst
+# Builds the desktop app from this repository's checkout. update.sh next to this file
+# builds and installs it in one step.
 
 pkgname=sparkymk2
-pkgver=0.1.0.r6.g7fa1fb4
+# The repository root, two levels above this file.
+_root="$startdir/../.."
+# Version from Cargo.toml plus the commit, computed here rather than in pkgver() so
+# builds don't rewrite this file.
+pkgver=$(cd "$_root" && printf '%s.r%s.g%s' \
+  "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" \
+  "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)")
 pkgrel=1
 pkgdesc='Editor and librarian for the Roland SP-404MKII'
 arch=('x86_64')
@@ -15,16 +19,6 @@ license=('GPL-3.0-or-later')
 depends=('webkit2gtk-4.1' 'gtk3' 'libsoup3' 'glib2' 'cairo' 'gdk-pixbuf2' 'dbus' 'systemd-libs' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
 makedepends=('cargo' 'nodejs' 'npm' 'pkgconf' 'git')
 options=('!lto' '!debug')
-
-# The repository root, two levels above this file.
-_root="$startdir/../.."
-
-pkgver() {
-  cd "$_root"
-  local version
-  version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
-}
 
 build() {
   cd "$_root/app"

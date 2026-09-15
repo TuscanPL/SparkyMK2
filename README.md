@@ -96,13 +96,14 @@ npm run tauri build    # build a release binary and packages
 `cargo build` in the repository root builds only the command-line tool.
 
 On Arch-based distributions you can install the app as a package, with a launcher entry
-and icon:
+and icon. The same command updates it after you change or pull the code:
 
 ```bash
-cd packaging/arch
-makepkg -f
-sudo pacman -U sparkymk2-*.pkg.tar.zst
+packaging/arch/update.sh
 ```
+
+It builds the package from your checkout and installs it with pacman, which asks for your
+password. The version includes the commit, so each new commit installs as an upgrade.
 
 ### Linux setup
 
