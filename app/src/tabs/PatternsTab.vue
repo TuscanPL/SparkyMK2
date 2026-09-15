@@ -28,7 +28,7 @@ const bars = computed(() => {
 });
 
 watch(
-  () => [store.selectedPattern, store.generation, store.patterns] as const,
+  () => [store.selectedPattern, store.patterns] as const,
   async ([slot]) => {
     const token = ++request;
     detail.value = null;

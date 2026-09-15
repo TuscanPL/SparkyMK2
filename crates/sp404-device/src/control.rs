@@ -5,7 +5,7 @@ use std::time::Duration;
 use sp404_proto::control::{self, PadOp, reply};
 use sp404_proto::fileapi;
 use sp404_proto::pad::{PAD_COUNT, PadBlock};
-use sp404_proto::params::Target;
+use sp404_proto::params::{self, Target};
 use sp404_proto::{Channel, Message, PadIndex, ProjectSettings};
 
 use crate::{Device, Error, Result, is_channel};
@@ -222,6 +222,26 @@ impl Device {
             p.len() >= 5 && p[..5] == head[..]
         })
         .map(drop)
+    }
+
+    /// Replace a pad's chop points: slot `n` gets `points[n]` (sample frames), and slots
+    /// past the end are cleared. The device keeps them by slot, without sorting.
+    pub fn set_chop_points(&self, pad: PadIndex, points: &[u32]) -> Result<()> {
+        if points.len() > PadBlock::CHOP_POINTS {
+            return Err(Error::Refused(format!(
+                "{pad}: {} chop points, at most {} fit",
+                points.len(),
+                PadBlock::CHOP_POINTS
+            )));
+        }
+        (0..PadBlock::CHOP_POINTS).try_for_each(|slot| {
+            let value = points.get(slot).map_or(-1, |&p| p as i32);
+            self.set_param(
+                params::CHOP_POINT_FIRST + slot as u8,
+                Target::Pad(pad),
+                value,
+            )
+        })
     }
 
     /// Waveform peaks (min, max) for one channel of a pad's sample.

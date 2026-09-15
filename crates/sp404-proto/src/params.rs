@@ -101,7 +101,8 @@ pub const PARAMS: &[ParamInfo] = &[
     global("tempo-select", 0x0B, 0, 1, "0 bank, 1 project"),
 ];
 
-pub const CHOP_POINT_FIRST: u8 = 0x8D;
+/// Chop point slots 1–16 are ids `8E`–`9D`, one slot each (`8D` is a separate 0–15 value).
+pub const CHOP_POINT_FIRST: u8 = 0x8E;
 pub const BANK_PROTECT_BASE: u8 = 0x17;
 pub const BANK_TEMPO_BASE: u8 = 0x21;
 pub const BANK_VOLUME_BASE: u8 = 0x35;

@@ -93,6 +93,28 @@ export interface PatternDetail {
   padsUsed: number[];
 }
 
+/** A pad's grid entry and details, read back after a change. */
+export interface PadState {
+  pad: Pad;
+  detail: PadDetail;
+}
+
+export interface ImportResult {
+  state: PadState;
+  sourceRate: number;
+  sourceChannels: number;
+  /** BPM × 100. */
+  detectedBpm: number | null;
+}
+
+export interface BpmResult {
+  state: PadState;
+  /** BPM × 100 that was stored. */
+  bpm: number | null;
+}
+
+export type PadOperation = "truncate" | "normalize" | "delete";
+
 export const api = {
   listPorts: () => invoke<PortInfo[]>("list_ports"),
   connect: (port: string | null) => invoke<string>("connect", { port }),
@@ -106,6 +128,21 @@ export const api = {
   preview: (pad: number, ms: number) => invoke<void>("preview_pad", { pad, ms }),
   patterns: () => invoke<boolean[]>("patterns"),
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
+
+  setPadParam: (pad: number, name: string, value: number) =>
+    invoke<PadState>("set_pad_param", { pad, name, value }),
+  setChopPoints: (pad: number, points: number[]) => invoke<PadState>("set_chop_points", { pad, points }),
+  renameSample: (pad: number, name: string) => invoke<PadState>("rename_sample", { pad, name }),
+  padOperation: (pad: number, operation: PadOperation) =>
+    invoke<PadState>("pad_operation", { pad, operation }),
+  moveSample: (from: number, to: number, exchange: boolean) =>
+    invoke<void>("move_sample", { from, to, exchange }),
+  importAudio: (pad: number, path: string, detectBpm: boolean, bpmRange: number) =>
+    invoke<ImportResult>("import_audio", { pad, path, detectBpm, bpmRange }),
+  analyzeBpm: (pad: number, mode: "detect" | "length", bpmRange: number) =>
+    invoke<BpmResult>("analyze_bpm", { pad, mode, bpmRange }),
+  setGlobalParam: (name: string, value: number) => invoke<Status>("set_global_param", { name, value }),
+  renameProject: (project: number, name: string) => invoke<string[]>("rename_project", { project, name }),
 };
 
 /** Error text from a failed command. */

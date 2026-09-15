@@ -1,15 +1,44 @@
 // App state shared by all views, and the actions that talk to the device.
 import { reactive } from "vue";
-import { api, errorText, type Pad, type PortInfo, type Status } from "./api";
+import {
+  api,
+  errorText,
+  type Pad,
+  type PadDetail,
+  type PadOperation,
+  type PadState,
+  type PortInfo,
+  type Status,
+  type Waveform,
+} from "./api";
+import { bankOf, bpm, padLabel } from "./format";
 
 export type Tab = "samples" | "patterns" | "settings";
 
 interface Toast {
   id: number;
   text: string;
+  kind: "error" | "info";
+}
+
+export interface DialogButton {
+  label: string;
+  value: string;
+  kind?: "primary" | "danger";
+}
+
+interface Dialog {
+  title: string;
+  message: string;
+  buttons: DialogButton[];
+  resolve: (value: string | null) => void;
 }
 
 const POLL_MS = 2000;
+const WAVE_POINTS = 2048;
+const PREFS_KEY = "sparkymk2.prefs";
+
+const savedPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
 
 export const store = reactive({
   ports: [] as PortInfo[],
@@ -27,24 +56,65 @@ export const store = reactive({
   bank: 0,
   selectedPad: null as number | null,
   selectedPattern: null as number | null,
-  /** Bumped by Refresh so views drop cached device data. */
-  generation: 0,
+  detail: null as PadDetail | null,
+  /** Bumped on every read-back, so controls rebuild from the device's values. */
+  detailRevision: 0,
+  detailLoading: false,
+  waveform: null as Waveform | null,
+  waveLoading: false,
+  /** Pads with an import or other long operation running. */
+  working: {} as Record<number, string>,
+  /** Edits in flight. */
+  pending: 0,
+  dialog: null as Dialog | null,
+  prefs: {
+    detectBpm: savedPrefs.detectBpm ?? true,
+    bpmRange: savedPrefs.bpmRange ?? 0,
+  },
   toasts: [] as Toast[],
 });
 
 let toastId = 0;
 let pollTimer: number | undefined;
 let lastPollError = "";
+let detailRequest = 0;
+/** Waveforms by project, pad and file size. Edits that rewrite audio drop their entry. */
+const waveCache = new Map<string, Waveform>();
 
-export function notify(text: string) {
+export function notify(text: string, kind: Toast["kind"] = "error") {
   const id = ++toastId;
-  store.toasts.push({ id, text });
-  window.setTimeout(() => dismiss(id), 6000);
+  store.toasts.push({ id, text, kind });
+  window.setTimeout(() => dismiss(id), kind === "error" ? 7000 : 4000);
 }
 
 export function dismiss(id: number) {
   const i = store.toasts.findIndex((t) => t.id === id);
   if (i >= 0) store.toasts.splice(i, 1);
+}
+
+export function savePrefs() {
+  localStorage.setItem(PREFS_KEY, JSON.stringify(store.prefs));
+}
+
+/** Show a dialog; resolves with the chosen button's value, or null when dismissed. */
+export function ask(title: string, message: string, buttons: DialogButton[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    store.dialog = { title, message, buttons, resolve };
+  });
+}
+
+export function closeDialog(value: string | null) {
+  const dialog = store.dialog;
+  store.dialog = null;
+  dialog?.resolve(value);
+}
+
+async function confirmAction(title: string, message: string, action: string): Promise<boolean> {
+  const answer = await ask(title, message, [
+    { label: "Cancel", value: "cancel" },
+    { label: action, value: "ok", kind: "danger" },
+  ]);
+  return answer === "ok";
 }
 
 export async function scanPorts() {
@@ -104,15 +174,19 @@ function resetDevice() {
   store.patterns = [];
   store.selectedPad = null;
   store.selectedPattern = null;
+  store.detail = null;
+  store.waveform = null;
+  waveCache.clear();
 }
 
 /** Reload everything that depends on the current project. */
 export async function loadProject() {
-  store.generation++;
+  waveCache.clear();
   store.status = await api.status();
   store.projects = await api.projectNames();
   await loadPads();
   store.patterns = [];
+  if (store.selectedPad !== null) await selectPad(store.selectedPad);
   if (store.tab === "patterns") await loadPatterns();
 }
 
@@ -153,6 +227,8 @@ export async function selectProject(project: number) {
     await api.selectProject(project);
     store.selectedPad = null;
     store.selectedPattern = null;
+    store.detail = null;
+    store.waveform = null;
     await loadProject();
   } catch (e) {
     handleError(e);
@@ -161,8 +237,51 @@ export async function selectProject(project: number) {
   }
 }
 
+/** Select a pad and load its details and waveform. */
+export async function selectPad(index: number | null) {
+  store.selectedPad = index;
+  const token = ++detailRequest;
+  store.detail = null;
+  store.waveform = null;
+  if (index === null) return;
+  store.detailLoading = true;
+  try {
+    const detail = await api.padDetail(index);
+    if (token !== detailRequest) return;
+    store.detail = detail;
+    store.detailLoading = false;
+    if (detail.sample) await loadWaveform(index, token);
+  } catch (e) {
+    if (token === detailRequest) handleError(e);
+  } finally {
+    if (token === detailRequest) store.detailLoading = false;
+  }
+}
+
+async function loadWaveform(index: number, token: number) {
+  const key = `${store.status?.project}:${index}:${store.pads[index]?.fileSize}`;
+  const cached = waveCache.get(key);
+  if (cached) {
+    store.waveform = cached;
+    return;
+  }
+  store.waveLoading = true;
+  try {
+    const wf = await api.waveform(index, WAVE_POINTS);
+    waveCache.set(key, wf);
+    if (token === detailRequest) store.waveform = wf;
+  } finally {
+    if (token === detailRequest) store.waveLoading = false;
+  }
+}
+
+function dropWaveform(index: number) {
+  for (const key of [...waveCache.keys()]) if (key.split(":")[1] === String(index)) waveCache.delete(key);
+}
+
 export function handleError(e: unknown) {
   const text = errorText(e);
+  console.error(text);
   if (text.includes("connection to the SP-404MKII was lost") || text === "not connected") {
     window.clearTimeout(pollTimer);
     resetDevice();
@@ -194,4 +313,195 @@ async function poll() {
     lastPollError = text;
   }
   if (store.connected) schedulePoll();
+}
+
+// ---- Editing ----
+
+/** Why pads in a bank can't be edited right now, if they can't. */
+export function editBlock(index: number | null): string | null {
+  if (!store.status || index === null) return "Not connected";
+  if (store.status.workingMode === 4) return "The SP-404MKII is showing a menu";
+  const bank = store.status.banks[bankOf(index)];
+  if (bank?.protected) return `Bank ${bank.letter} is protected`;
+  return null;
+}
+
+async function edit<T>(work: () => Promise<T>): Promise<T | undefined> {
+  store.pending++;
+  try {
+    return await work();
+  } catch (e) {
+    handleError(e);
+    return undefined;
+  } finally {
+    store.pending--;
+  }
+}
+
+/** Take a pad's state read back from the device. */
+export function applyPad(state: PadState) {
+  store.pads[state.pad.index] = state.pad;
+  if (store.selectedPad === state.detail.index) store.detail = state.detail;
+  store.detailRevision++;
+}
+
+export async function setPadParam(index: number, name: string, value: number) {
+  const state = await edit(() => api.setPadParam(index, name, value));
+  if (state) applyPad(state);
+  else resyncDetail();
+}
+
+/** Give controls a fresh copy of the details, so drafts snap back after a failed edit. */
+function resyncDetail() {
+  store.detailRevision++;
+}
+
+export async function setChopPoints(index: number, points: number[]) {
+  const state = await edit(() => api.setChopPoints(index, points));
+  if (state) applyPad(state);
+  else resyncDetail();
+}
+
+export async function renameSample(index: number, name: string) {
+  const state = await edit(() => api.renameSample(index, name));
+  if (state) applyPad(state);
+  else resyncDetail();
+}
+
+const OPERATIONS: Record<PadOperation, { title: string; message: string; action: string; busy: string }> = {
+  truncate: {
+    title: "Truncate sample?",
+    message: "Audio before Start and after End is removed from the sample on the device. This can't be undone.",
+    action: "Truncate",
+    busy: "Truncating",
+  },
+  normalize: {
+    title: "Normalize sample?",
+    message: "The sample's level is raised to full scale on the device. This can't be undone.",
+    action: "Normalize",
+    busy: "Normalizing",
+  },
+  delete: {
+    title: "Delete sample?",
+    message: "The sample is erased from the pad and the SD card. This can't be undone.",
+    action: "Delete",
+    busy: "Deleting",
+  },
+};
+
+export async function padOperation(index: number, operation: PadOperation) {
+  const op = OPERATIONS[operation];
+  const name = store.pads[index]?.name;
+  if (!(await confirmAction(op.title, `${padLabel(index)} “${name}”: ${op.message}`, op.action))) return;
+  store.working[index] = op.busy;
+  try {
+    const state = await edit(() => api.padOperation(index, operation));
+    if (!state) return;
+    dropWaveform(index);
+    applyPad(state);
+    if (store.selectedPad === index) await selectPad(index);
+  } finally {
+    delete store.working[index];
+  }
+}
+
+export async function moveSample(from: number, to: number) {
+  if (from === to || !store.pads[from]?.hasSample) return;
+  let exchange = false;
+  if (store.pads[to]?.hasSample) {
+    const answer = await ask(
+      `${padLabel(to)} already holds a sample`,
+      `Replace “${store.pads[to].name}” with “${store.pads[from].name}”, or swap the two pads? Replacing erases ${padLabel(to)}'s sample.`,
+      [
+        { label: "Cancel", value: "cancel" },
+        { label: "Swap", value: "swap", kind: "primary" },
+        { label: "Replace", value: "replace", kind: "danger" },
+      ],
+    );
+    if (answer !== "swap" && answer !== "replace") return;
+    exchange = answer === "swap";
+  }
+  store.working[from] = "Moving";
+  store.working[to] = "Moving";
+  try {
+    const done = await edit(async () => {
+      await api.moveSample(from, to, exchange);
+      return true;
+    });
+    if (!done) return;
+    waveCache.clear();
+    await loadPads();
+    if (store.selectedPad === from || store.selectedPad === to) await selectPad(to);
+  } finally {
+    delete store.working[from];
+    delete store.working[to];
+  }
+}
+
+/** Import files onto consecutive pads, starting at `start`, in file name order. */
+export async function importFiles(paths: string[], start: number) {
+  const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
+  const sorted = [...paths].sort((a, b) =>
+    fileName(a).localeCompare(fileName(b), undefined, { numeric: true, sensitivity: "base" }),
+  );
+  const targets = sorted.slice(0, 160 - start).map((path, i) => ({ path, index: start + i }));
+  if (!targets.length) return;
+  const blocked = targets.map((t) => editBlock(t.index)).find(Boolean);
+  if (blocked) {
+    notify(blocked);
+    return;
+  }
+  const occupied = targets.filter((t) => store.pads[t.index]?.hasSample);
+  if (occupied.length) {
+    const which = occupied.map((t) => padLabel(t.index)).join(", ");
+    const ok = await confirmAction(
+      occupied.length === 1 ? `Replace ${which}?` : `Replace ${occupied.length} samples?`,
+      `${which} already ${occupied.length === 1 ? "holds a sample" : "hold samples"}. Importing replaces ${occupied.length === 1 ? "it" : "them"}. This can't be undone.`,
+      "Replace",
+    );
+    if (!ok) return;
+  }
+  if (paths.length > targets.length) notify(`Only ${targets.length} of ${paths.length} files fit before J16.`, "info");
+  for (const t of targets) store.working[t.index] = "Waiting";
+  for (const t of targets) {
+    store.working[t.index] = "Importing";
+    try {
+      const result = await edit(() => api.importAudio(t.index, t.path, store.prefs.detectBpm, store.prefs.bpmRange));
+      if (!result) continue;
+      dropWaveform(t.index);
+      applyPad(result.state);
+      if (store.selectedPad === t.index) await selectPad(t.index);
+      if (store.prefs.detectBpm && result.detectedBpm === null) {
+        notify(`${padLabel(t.index)}: no tempo detected`, "info");
+      }
+    } finally {
+      delete store.working[t.index];
+    }
+  }
+  if (store.selectedPad === null) await selectPad(targets[0].index);
+}
+
+export async function analyzeBpm(index: number, mode: "detect" | "length") {
+  store.working[index] = mode === "detect" ? "Detecting BPM" : "Setting BPM";
+  try {
+    const result = await edit(() => api.analyzeBpm(index, mode, store.prefs.bpmRange));
+    if (!result) return;
+    applyPad(result.state);
+    notify(result.bpm === null ? "No tempo detected" : `BPM set to ${bpm(result.bpm)}`, "info");
+  } finally {
+    delete store.working[index];
+  }
+}
+
+export async function setGlobalParam(name: string, value: number) {
+  const status = await edit(() => api.setGlobalParam(name, value));
+  if (status) store.status = status;
+}
+
+export async function renameProject(project: number, name: string) {
+  const status = await edit(async () => {
+    store.projects = await api.renameProject(project, name);
+    return api.status();
+  });
+  if (status) store.status = status;
 }

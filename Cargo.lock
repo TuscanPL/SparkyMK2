@@ -3257,6 +3257,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp404-device",
+ "sp404-dsp",
  "sp404-formats",
  "sp404-proto",
  "tauri",

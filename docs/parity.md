@@ -49,7 +49,7 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 | Pad matrix: 10 banks × 16 pads, occupied state, bank protect ("P") | ✅ |
 | Bank tempo readout per bank | ✅ |
 | Waveform view with zoom (horizontal/vertical), S/E markers, loop top | ✅ peaks |
-| Chop editing: Edit Chop, Add/Remove Chop, Remove All, Auto Assign, Create Chop Points, Snap to Grid | ✅ chop points `8D`–`9C`, Edit Chop toggle `8F pad 02`; Auto Assign / Create Chop Points are host-side |
+| Chop editing: Edit Chop, Add/Remove Chop, Remove All, Auto Assign, Create Chop Points, Snap to Grid | ✅ chop points `8E`–`9D` (verified on hardware), Edit Chop toggle `8F pad 02`; Auto Assign / Create Chop Points are host-side |
 | Set START / END / LOOP TOP here, From [S], Link [S][E] | ✅ `67`/`68`/`71` |
 | Preview / Stop | ✅ `8E` / `8F` |
 | Truncate, Normalize, Emphasis | ✅ device-side commands (the app has one Emphasis action) |

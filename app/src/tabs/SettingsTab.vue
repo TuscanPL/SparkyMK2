@@ -1,7 +1,41 @@
 <script setup lang="ts">
+import { ref, watch } from "vue";
+import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
-import { bpm, storage } from "../format";
-import { store } from "../store";
+import { PROJECT_NAME_LEN, bpm, storage } from "../format";
+import { renameProject, setGlobalParam, store } from "../store";
+
+const locked = () => store.status?.workingMode === 4;
+
+/** Tempo text boxes, keyed by setting name, while being typed in. */
+const tempoText = ref<Record<string, string>>({});
+const volumeDraft = ref<Record<string, number>>({});
+
+watch(
+  () => store.status,
+  () => {
+    tempoText.value = {};
+    volumeDraft.value = {};
+  },
+);
+
+function tempoValue(name: string, hundredths: number) {
+  return tempoText.value[name] ?? bpm(hundredths);
+}
+
+function commitTempo(name: string, current: number) {
+  const text = tempoText.value[name];
+  delete tempoText.value[name];
+  if (text === undefined) return;
+  const value = Math.round(parseFloat(text) * 100);
+  if (Number.isFinite(value) && value >= 4000 && value <= 20000 && value !== current) setGlobalParam(name, value);
+}
+
+function commitVolume(letter: string, current: number) {
+  const name = `bank-volume-${letter.toLowerCase()}`;
+  const value = volumeDraft.value[name];
+  if (value !== undefined && value !== current) setGlobalParam(name, value);
+}
 </script>
 
 <template>
@@ -10,14 +44,43 @@ import { store } from "../store";
       <div class="label">Project</div>
       <div class="project">
         <span class="num mono">{{ String(store.status.project).padStart(2, "0") }}</span>
-        <span class="pname">{{ store.projects[store.status.project - 1] || "Unnamed" }}</span>
+        <EditableName
+          class="pname"
+          :value="store.projects[store.status.project - 1] ?? ''"
+          placeholder="Unnamed"
+          :max-length="PROJECT_NAME_LEN"
+          :disabled="locked()"
+          @commit="renameProject(store.status.project, $event)"
+        />
       </div>
-      <dl>
-        <dt>Tempo source</dt>
-        <dd>{{ store.status.usesProjectTempo ? "Project" : "Bank" }}</dd>
-        <dt>Project tempo</dt>
-        <dd class="mono">{{ bpm(store.status.projectTempo) }} BPM</dd>
-      </dl>
+      <div class="fields">
+        <label class="field">
+          <span>Tempo source</span>
+          <select
+            :value="store.status.usesProjectTempo ? 1 : 0"
+            :disabled="locked()"
+            @change="setGlobalParam('tempo-select', Number(($event.target as HTMLSelectElement).value))"
+          >
+            <option :value="0">Bank tempo</option>
+            <option :value="1">Project tempo</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Project tempo</span>
+          <span class="tempo">
+            <input
+              class="mono"
+              inputmode="decimal"
+              :value="tempoValue('project-tempo', store.status.projectTempo)"
+              :disabled="locked()"
+              @input="tempoText['project-tempo'] = ($event.target as HTMLInputElement).value"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              @blur="commitTempo('project-tempo', store.status.projectTempo)"
+            />
+            BPM
+          </span>
+        </label>
+      </div>
     </section>
 
     <section class="panel card">
@@ -38,7 +101,7 @@ import { store } from "../store";
         <thead>
           <tr>
             <th>Bank</th>
-            <th>Tempo</th>
+            <th>Tempo (BPM)</th>
             <th>Volume</th>
             <th>Protect</th>
           </tr>
@@ -46,23 +109,51 @@ import { store } from "../store";
         <tbody>
           <tr v-for="b in store.status.banks" :key="b.letter">
             <td class="letter">{{ b.letter }}</td>
-            <td class="mono">{{ bpm(b.tempo) }}</td>
+            <td>
+              <input
+                class="mono bank-tempo"
+                inputmode="decimal"
+                :value="tempoValue(`bank-tempo-${b.letter.toLowerCase()}`, b.tempo)"
+                :disabled="locked()"
+                @input="tempoText[`bank-tempo-${b.letter.toLowerCase()}`] = ($event.target as HTMLInputElement).value"
+                @keydown.enter="($event.target as HTMLInputElement).blur()"
+                @blur="commitTempo(`bank-tempo-${b.letter.toLowerCase()}`, b.tempo)"
+              />
+            </td>
             <td>
               <div class="volume">
-                <div class="meter"><span :style="{ width: `${(b.volume / 127) * 100}%` }" /></div>
-                <span class="mono">{{ b.volume }}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="127"
+                  :value="volumeDraft[`bank-volume-${b.letter.toLowerCase()}`] ?? b.volume"
+                  :disabled="locked()"
+                  @input="volumeDraft[`bank-volume-${b.letter.toLowerCase()}`] = Number(($event.target as HTMLInputElement).value)"
+                  @change="commitVolume(b.letter, b.volume)"
+                />
+                <span class="mono">{{ volumeDraft[`bank-volume-${b.letter.toLowerCase()}`] ?? b.volume }}</span>
               </div>
             </td>
             <td>
-              <span v-if="b.protected" class="lock"><Icon name="lock" :size="13" /> On</span>
-              <span v-else class="muted">Off</span>
+              <label class="switch-row">
+                <span class="switch">
+                  <input
+                    type="checkbox"
+                    :checked="b.protected"
+                    :disabled="locked()"
+                    @change="setGlobalParam(`bank-protect-${b.letter.toLowerCase()}`, ($event.target as HTMLInputElement).checked ? 1 : 0)"
+                  />
+                  <span />
+                </span>
+                <Icon v-if="b.protected" name="lock" :size="13" />
+              </label>
             </td>
           </tr>
         </tbody>
       </table>
     </section>
 
-    <p class="note muted">Settings are read-only in this version.</p>
+    <p class="note muted">Changes go to the SP-404MKII as soon as you make them.</p>
   </div>
 </template>
 
@@ -93,6 +184,7 @@ import { store } from "../store";
   align-items: baseline;
   gap: 12px;
   margin: 8px 0 12px;
+  min-width: 0;
 }
 
 .num {
@@ -104,6 +196,37 @@ import { store } from "../store";
 .pname {
   font-size: 18px;
   font-weight: 600;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+}
+
+.field select,
+.field input {
+  color: var(--text);
+}
+
+.tempo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tempo input,
+.bank-tempo {
+  width: 84px;
+  text-align: right;
 }
 
 dl {
@@ -137,7 +260,7 @@ th {
 }
 
 td {
-  padding: 7px 10px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -155,24 +278,19 @@ tr:last-child td {
   gap: 10px;
 }
 
-.meter {
-  width: 180px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
+.volume input {
+  width: 200px;
 }
 
-.meter span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
+.volume span {
+  width: 28px;
+  text-align: right;
 }
 
-.lock {
-  display: inline-flex;
+.switch-row {
+  display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   color: var(--accent);
 }
 

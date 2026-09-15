@@ -21,6 +21,7 @@ const tempo = (bank: number) => {
       v-for="(letter, i) in BANK_LETTERS"
       :key="letter"
       class="bank"
+      :data-bank="i"
       :class="{ active: store.bank === i }"
       @click="store.bank = i"
     >

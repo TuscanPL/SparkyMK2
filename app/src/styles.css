@@ -89,6 +89,127 @@ button.ghost:hover:not(:disabled) {
   border-color: var(--line);
 }
 
+button.danger {
+  color: #ffb3b3;
+  border-color: rgba(255, 107, 107, 0.45);
+}
+
+button.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.14);
+  border-color: var(--danger);
+}
+
+input:not([type]),
+input[type="text"] {
+  font: inherit;
+  color: var(--text);
+  background: #0f1013;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+input:not([type]):focus,
+input[type="text"]:focus {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+input:disabled,
+select:disabled {
+  opacity: 0.5;
+}
+
+input[type="checkbox"]:not(.switch input) {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  margin: 0;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #1b1405;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--faint);
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  flex: none;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.switch input:disabled {
+  cursor: default;
+}
+
+.switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: var(--line-strong);
+  transition: background 0.15s;
+}
+
+.switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 0.15s;
+}
+
+.switch input:checked + span {
+  background: var(--accent);
+}
+
+.switch input:checked + span::after {
+  transform: translateX(14px);
+  background: #1b1405;
+}
+
+.switch input:disabled + span {
+  opacity: 0.5;
+}
+
 select {
   background: var(--panel-2);
   border: 1px solid var(--line-strong);

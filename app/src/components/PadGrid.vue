@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PAD_ROWS, padIndex } from "../format";
+import { clickAfterDrag, drag } from "../drag";
 
 const props = defineProps<{
   bank: number;
@@ -7,9 +8,17 @@ const props = defineProps<{
   /** Whether the slot at a pad index is in use. */
   filled: (index: number) => boolean;
   accent?: "amber" | "teal";
+  /** Label of a long operation running on a pad. */
+  working?: Record<number, string>;
+  /** Pads can be dragged and receive drops. */
+  droppable?: boolean;
 }>();
 
-const emit = defineEmits<{ select: [index: number] }>();
+const emit = defineEmits<{ select: [index: number]; press: [event: PointerEvent, index: number] }>();
+
+function click(index: number) {
+  if (!clickAfterDrag()) emit("select", index);
+}
 </script>
 
 <template>
@@ -19,14 +28,22 @@ const emit = defineEmits<{ select: [index: number] }>();
         v-for="n in row"
         :key="n"
         class="pad"
+        :data-pad="props.droppable ? padIndex(props.bank, n) : undefined"
         :class="{
           filled: props.filled(padIndex(props.bank, n)),
           selected: props.selected === padIndex(props.bank, n),
+          dragging: drag.from === padIndex(props.bank, n),
+          target: props.droppable && drag.over === padIndex(props.bank, n) && drag.from !== padIndex(props.bank, n),
         }"
-        @click="emit('select', padIndex(props.bank, n))"
+        @pointerdown="emit('press', $event, padIndex(props.bank, n))"
+        @click="click(padIndex(props.bank, n))"
       >
         <span class="num mono">{{ n }}</span>
         <slot :index="padIndex(props.bank, n)" :number="n" />
+        <span v-if="props.working?.[padIndex(props.bank, n)]" class="working">
+          <span class="spinner" />
+          {{ props.working[padIndex(props.bank, n)] }}
+        </span>
       </button>
     </template>
   </div>
@@ -40,6 +57,7 @@ const emit = defineEmits<{ select: [index: number] }>();
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+  user-select: none;
 }
 
 .grid.teal {
@@ -82,6 +100,16 @@ const emit = defineEmits<{ select: [index: number] }>();
   box-shadow: 0 0 0 1px var(--tone-line);
 }
 
+.pad.dragging {
+  opacity: 0.45;
+}
+
+.pad.target {
+  border: 1px solid var(--tone);
+  background: var(--tone-soft);
+  box-shadow: 0 0 0 2px var(--tone-line);
+}
+
 .num {
   position: absolute;
   top: 7px;
@@ -92,5 +120,18 @@ const emit = defineEmits<{ select: [index: number] }>();
 
 .pad.filled .num {
   color: var(--muted);
+}
+
+.working {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text);
+  background: rgba(17, 18, 21, 0.78);
 }
 </style>

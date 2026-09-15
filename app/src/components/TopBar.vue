@@ -61,6 +61,7 @@ function onProject(event: Event) {
         <span class="mono">{{ storage(store.status.freeKb) }}</span>
       </div>
 
+      <span v-if="store.pending" class="saving muted"><span class="spinner" /> Saving</span>
       <button class="ghost icon" title="Reload from the device" @click="refresh">
         <Icon name="refresh" />
       </button>
@@ -149,6 +150,13 @@ function onProject(event: Event) {
 
 .icon {
   padding: 6px;
+}
+
+.saving {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
 }
 
 .device {

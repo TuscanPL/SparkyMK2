@@ -5,7 +5,7 @@ import { dismiss, store } from "../store";
 
 <template>
   <div class="toasts">
-    <div v-for="t in store.toasts" :key="t.id" class="toast">
+    <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind">
       <span>{{ t.text }}</span>
       <button class="ghost" title="Dismiss" @click="dismiss(t.id)"><Icon name="close" :size="14" /></button>
     </div>
@@ -33,6 +33,11 @@ import { dismiss, store } from "../store";
   background: #2a1d1f;
   border: 1px solid rgba(255, 107, 107, 0.45);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast.info {
+  background: #1a2521;
+  border-color: rgba(69, 212, 184, 0.45);
 }
 
 .toast span {

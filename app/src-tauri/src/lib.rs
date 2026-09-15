@@ -1,6 +1,7 @@
 //! SparkyMK2 desktop app: Tauri commands over the `sp404-device` core.
 
 mod commands;
+mod edit;
 
 use std::sync::{Arc, Mutex};
 
@@ -30,6 +31,15 @@ pub fn run() {
             commands::preview_pad,
             commands::patterns,
             commands::pattern_detail,
+            edit::set_pad_param,
+            edit::set_chop_points,
+            edit::rename_sample,
+            edit::pad_operation,
+            edit::move_sample,
+            edit::import_audio,
+            edit::analyze_bpm,
+            edit::set_global_param,
+            edit::rename_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SparkyMK2");

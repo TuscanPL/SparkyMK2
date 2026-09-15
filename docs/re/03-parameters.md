@@ -22,7 +22,7 @@ A long message on channel `0x05`. The device echoes the same payload back.
 | `68` | End | sample frame |
 | `69` | Level | 0–127 |
 | `6A` | Gate | 0/1 |
-| `6B` | Loop | 0/1 |
+| `6B` | Loop | 0/1; the pad block field reads `7FFFFFFF` while Loop is on |
 | `6D` | Mute Group | 0 = Off, 1–10 |
 | `6E` | BPM Sync | 0/1 |
 | `6F` | BPM | BPM × 100 (4000–20000) |
@@ -45,7 +45,8 @@ A long message on channel `0x05`. The device echoes the same payload back.
 | `8A` | Groove | 0 Off, 1–8 = 8beat <, 8beat <<, 8beat >, 8beat >>, 16beat <, 16beat <<, 16beat >, 16beat >> |
 | `8B` | Rate | signed −7..7, shown as 1–15 (0 shows as 8) |
 | `8C` | Humanize | 0 Off, 1 Low, 2 Med, 3 High |
-| `8D`–`9C` | Chop points 1–16 | sample frame, −1 = unused. Adding or removing a chop rewrites all 16; dragging a point resends only that one |
+| `8D` | unknown | 0–15; larger values echo 15 and negative ones 0. Stored at pad block byte 279, not in the chop points, and 0 in every saved `PADCONF.BIN` |
+| `8E`–`9D` | Chop points 1–16 | sample frame, −1 = unused; one id per slot, kept in slot order without sorting. Chops made on the device keep a chop at frame 0 in slot 1. Adding or removing a chop rewrites all 16; dragging a point resends only that one |
 
 **Flags in `70`:**
 
@@ -91,8 +92,8 @@ IDs `2B`–`34` are not yet seen. Likely another per-bank block _(?)_.
 | 0–2 | `1E pad:u16` |
 | 3–174 | 43 × u32 LE fields (below) |
 | 175–198 | name, 24 bytes, space padded, NUL at 198 |
-| 199–262 | 16 × i32 LE chop points (−1 = unused) |
-| 263–326 | 16 × u32 LE, zero in every block seen |
+| 199–262 | 16 × i32 LE chop points (−1 = unused), ids `8E`–`9D` in order |
+| 263–326 | 16 × u32 LE; byte 279 (word 4) holds id `8D`, the rest were zero in every block seen |
 
 | Field | Content |
 |---|---|
@@ -146,7 +147,7 @@ success.
 | `9F pad:u16` | `1F pad:u16 status` | sent after the pad block on import; commit/load |
 | `8E pad:u16 7F FF` | `0E pad:u16 00` | Preview: start playing the pad (sent on mouse down). The device also echoes selected bank/pad (global `00`/`01`) |
 | `8F pad:u16 00` | `0F pad:u16 00` | Preview: stop (sent on mouse up) |
-| `8F pad:u16 02` | `0F pad:u16 00` | sent when Edit Chop is switched on **and** off |
+| `8F pad:u16 02` | `0F pad:u16 00` | sent when Edit Chop is switched on **and** off. Chop point writes take effect without it |
 | `95 src:u16 dst:u16 mode:u16` | `15 00`, then `1A proj` | drag a pad onto a pad. `mode` 0 = Overwrite: the destination is replaced and the source becomes empty; this is also a plain move onto an empty pad. 1 = Exchange: the pads swap |
 | `02 pad:u16 name…` (short or long) | echo, padded to 24 characters | set sample name |
 | `35 project:u8 name…` (long) | echo | set project name (0 = project 1) |

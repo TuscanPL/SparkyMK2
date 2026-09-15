@@ -8,15 +8,16 @@ use sp404_device::{Device, find_ports};
 use sp404_formats::pattern::{Event, PPQ};
 use sp404_formats::{Pattern, Sample, smp};
 use sp404_proto::PadIndex;
+use sp404_proto::pad::PadBlock;
 use sp404_proto::params::{self, Scope};
 use tauri::State;
 
 use crate::AppState;
 
-type CmdResult<T> = Result<T, String>;
+pub(crate) type CmdResult<T> = Result<T, String>;
 
 /// A failed device call. `Closed` means the link is gone, so the device is dropped.
-enum Failure {
+pub(crate) enum Failure {
     Device(sp404_device::Error),
     Other(String),
 }
@@ -40,7 +41,7 @@ impl From<String> for Failure {
 }
 
 /// Run `f` with the open device on the blocking pool.
-async fn with_device<T, F>(state: &AppState, f: F) -> CmdResult<T>
+pub(crate) async fn with_device<T, F>(state: &AppState, f: F) -> CmdResult<T>
 where
     T: Send + 'static,
     F: FnOnce(&Device) -> Result<T, Failure> + Send + 'static,
@@ -69,7 +70,7 @@ where
     }
 }
 
-fn pad_index(index: u16) -> Result<PadIndex, Failure> {
+pub(crate) fn pad_index(index: u16) -> Result<PadIndex, Failure> {
     PadIndex::new(index).ok_or_else(|| Failure::Other(format!("no pad with index {index}")))
 }
 
@@ -150,34 +151,35 @@ pub struct StatusDto {
     working_mode: Option<u8>,
 }
 
+pub(crate) fn read_status(dev: &Device) -> Result<StatusDto, Failure> {
+    let st = dev.status()?;
+    let free_kb = dev.free_kb()?;
+    Ok(StatusDto {
+        port: dev.port_name().to_string(),
+        project: st.project + 1,
+        project_name: st.settings.name(),
+        uses_project_tempo: st.settings.uses_project_tempo(),
+        project_tempo: st.settings.project_tempo(),
+        banks: (0..10)
+            .map(|b| {
+                let bank = st.settings.bank(b);
+                BankDto {
+                    letter: (b'A' + b as u8) as char,
+                    tempo: bank.tempo,
+                    volume: bank.volume,
+                    protected: bank.protected,
+                }
+            })
+            .collect(),
+        free_kb,
+        selected_pad: st.selected.map(PadIndex::index),
+        working_mode: st.raw.get(12).copied(),
+    })
+}
+
 #[tauri::command]
 pub async fn device_status(state: State<'_, AppState>) -> CmdResult<StatusDto> {
-    with_device(&state, |dev| {
-        let st = dev.status()?;
-        let free_kb = dev.free_kb()?;
-        Ok(StatusDto {
-            port: dev.port_name().to_string(),
-            project: st.project + 1,
-            project_name: st.settings.name(),
-            uses_project_tempo: st.settings.uses_project_tempo(),
-            project_tempo: st.settings.project_tempo(),
-            banks: (0..10)
-                .map(|b| {
-                    let bank = st.settings.bank(b);
-                    BankDto {
-                        letter: (b'A' + b as u8) as char,
-                        tempo: bank.tempo,
-                        volume: bank.volume,
-                        protected: bank.protected,
-                    }
-                })
-                .collect(),
-            free_kb,
-            selected_pad: st.selected.map(PadIndex::index),
-            working_mode: st.raw.get(12).copied(),
-        })
-    })
-    .await
+    with_device(&state, read_status).await
 }
 
 /// The 16 project names; empty for unnamed slots.
@@ -203,34 +205,34 @@ pub async fn select_project(state: State<'_, AppState>, project: u8) -> CmdResul
 pub struct PadDto {
     index: u16,
     label: String,
-    has_sample: bool,
+    pub(crate) has_sample: bool,
     name: String,
     level: i32,
     /// BPM × 100.
-    bpm: i32,
+    pub(crate) bpm: i32,
     file_size: u32,
+}
+
+fn pad_dto(b: &PadBlock) -> PadDto {
+    PadDto {
+        index: b.pad.index(),
+        label: b.pad.to_string(),
+        has_sample: b.has_sample(),
+        name: if b.has_sample() {
+            b.name()
+        } else {
+            String::new()
+        },
+        level: b.param(0x69).unwrap_or(0),
+        bpm: b.param(0x6F).unwrap_or(0),
+        file_size: b.file_size(),
+    }
 }
 
 #[tauri::command]
 pub async fn pads(state: State<'_, AppState>) -> CmdResult<Vec<PadDto>> {
     with_device(&state, |dev| {
-        Ok(dev
-            .pad_blocks()?
-            .iter()
-            .map(|b| PadDto {
-                index: b.pad.index(),
-                label: b.pad.to_string(),
-                has_sample: b.has_sample(),
-                name: if b.has_sample() {
-                    b.name()
-                } else {
-                    String::new()
-                },
-                level: b.param(0x69).unwrap_or(0),
-                bpm: b.param(0x6F).unwrap_or(0),
-                file_size: b.file_size(),
-            })
-            .collect())
+        Ok(dev.pad_blocks()?.iter().map(pad_dto).collect())
     })
     .await
 }
@@ -238,8 +240,8 @@ pub async fn pads(state: State<'_, AppState>) -> CmdResult<Vec<PadDto>> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParamDto {
-    name: &'static str,
-    value: i32,
+    pub(crate) name: &'static str,
+    pub(crate) value: i32,
     min: i32,
     max: i32,
     help: &'static str,
@@ -248,12 +250,12 @@ pub struct ParamDto {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SampleInfoDto {
-    channels: u16,
-    frames: u32,
+    pub(crate) channels: u16,
+    pub(crate) frames: u32,
     /// Start, end and loop top in sample frames.
-    start: u32,
-    end: u32,
-    loop_top: u32,
+    pub(crate) start: u32,
+    pub(crate) end: u32,
+    pub(crate) loop_top: u32,
     chop_points: Vec<u32>,
 }
 
@@ -263,51 +265,57 @@ pub struct PadDetailDto {
     index: u16,
     label: String,
     name: String,
-    sample: Option<SampleInfoDto>,
-    params: Vec<ParamDto>,
+    pub(crate) sample: Option<SampleInfoDto>,
+    pub(crate) params: Vec<ParamDto>,
 }
 
-#[tauri::command]
-pub async fn pad_detail(state: State<'_, AppState>, pad: u16) -> CmdResult<PadDetailDto> {
-    with_device(&state, move |dev| {
-        let pad = pad_index(pad)?;
-        let block = dev.pad_block(pad)?;
-        let sample = if block.has_sample() {
-            let project = dev.current_project()? + 1;
-            let head = dev
-                .read_prefix(&pad.sample_path(project), smp::HEADER_LEN as u32)?
-                .ok_or_else(|| format!("{pad}: sample file is missing"))?;
-            let channels = smp::HeaderInfo::parse(&head)?.channels.max(1);
-            // Pad blocks hold byte offsets into the SMP file.
-            let to_frame = |bytes: u32| {
-                bytes.saturating_sub(smp::HEADER_LEN as u32) / (2 * u32::from(channels))
-            };
-            let (start, end) = block.start_end_bytes();
-            Some(SampleInfoDto {
-                channels,
-                frames: to_frame(block.file_size()),
-                start: to_frame(start),
-                end: to_frame(end),
-                loop_top: to_frame(block.loop_start_bytes()),
-                chop_points: block.chop_points().into_iter().flatten().collect(),
+/// A pad's grid entry and details, read back after a change.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PadState {
+    pub(crate) pad: PadDto,
+    pub(crate) detail: PadDetailDto,
+}
+
+pub(crate) fn read_pad(dev: &Device, pad: PadIndex) -> Result<PadState, Failure> {
+    let block = dev.pad_block(pad)?;
+    let sample = if block.has_sample() {
+        let project = dev.current_project()? + 1;
+        let head = dev
+            .read_prefix(&pad.sample_path(project), smp::HEADER_LEN as u32)?
+            .ok_or_else(|| format!("{pad}: sample file is missing"))?;
+        let channels = smp::HeaderInfo::parse(&head)?.channels.max(1);
+        // Pad blocks hold byte offsets into the SMP file.
+        let to_frame =
+            |bytes: u32| bytes.saturating_sub(smp::HEADER_LEN as u32) / (2 * u32::from(channels));
+        let (start, end) = block.start_end_bytes();
+        Some(SampleInfoDto {
+            channels,
+            frames: to_frame(block.file_size()),
+            start: to_frame(start),
+            end: to_frame(end),
+            loop_top: to_frame(block.loop_start_bytes()),
+            chop_points: block.chop_points().into_iter().flatten().collect(),
+        })
+    } else {
+        None
+    };
+    let params = params::PARAMS
+        .iter()
+        .filter(|p| p.scope == Scope::Pad)
+        .filter_map(|p| {
+            block.param(p.id).map(|value| ParamDto {
+                name: p.name,
+                value,
+                min: p.min,
+                max: p.max,
+                help: p.help,
             })
-        } else {
-            None
-        };
-        let params = params::PARAMS
-            .iter()
-            .filter(|p| p.scope == Scope::Pad)
-            .filter_map(|p| {
-                block.param(p.id).map(|value| ParamDto {
-                    name: p.name,
-                    value,
-                    min: p.min,
-                    max: p.max,
-                    help: p.help,
-                })
-            })
-            .collect();
-        Ok(PadDetailDto {
+        })
+        .collect();
+    Ok(PadState {
+        pad: pad_dto(&block),
+        detail: PadDetailDto {
             index: pad.index(),
             label: pad.to_string(),
             name: if block.has_sample() {
@@ -317,8 +325,16 @@ pub async fn pad_detail(state: State<'_, AppState>, pad: u16) -> CmdResult<PadDe
             },
             sample,
             params,
-        })
+        },
     })
+}
+
+#[tauri::command]
+pub async fn pad_detail(state: State<'_, AppState>, pad: u16) -> CmdResult<PadDetailDto> {
+    with_device(
+        &state,
+        move |dev| Ok(read_pad(dev, pad_index(pad)?)?.detail),
+    )
     .await
 }
 
