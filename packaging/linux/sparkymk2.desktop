@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SparkyMK2
+GenericName=Sampler Editor
+Comment=Edit samples, pads, patterns and projects on an SP-404MKII
+Exec=sparkymk2
+Icon=sparkymk2
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=SP-404MKII;SP404;sampler;pads;
+StartupWMClass=sparkymk2

@@ -95,6 +95,15 @@ npm run tauri build    # build a release binary and packages
 
 `cargo build` in the repository root builds only the command-line tool.
 
+On Arch-based distributions you can install the app as a package, with a launcher entry
+and icon:
+
+```bash
+cd packaging/arch
+makepkg -f
+sudo pacman -U sparkymk2-*.pkg.tar.zst
+```
+
 ### Linux setup
 
 USB port discovery needs libudev and pkg-config:
