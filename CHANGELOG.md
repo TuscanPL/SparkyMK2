@@ -5,6 +5,17 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Fixed
+
+- Samples tab: the Trigger checkboxes and the Chromatic menu now line up with the rows
+  above them, at any window size.
+
+### Changed
+
+- The README says the project is vibe coded, and points at `docs/re/` for anyone who
+  would rather reimplement it by hand.
+- Releasing pushes the tag on its own, so the build actually starts.
+
 ## [0.1.0] - 2026-09-20
 
 First public release.
