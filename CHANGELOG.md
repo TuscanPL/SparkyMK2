@@ -30,6 +30,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 - Listing a directory on the SD card no longer fails at the end: the card closes its own
   directory handle once the listing runs out and then refuses `closedir`.
+- Dragging a pad, a sound, a waveform marker or the pixels of a display image no longer
+  drags a text selection along with it.
+- Deleting a pad's sample said it erased the sample "from the pad and the SD card". It
+  only ever removed the copy the project keeps in the device's own storage; nothing on
+  the SD card was touched. The same stale wording was in the Files tab's delete
+  confirmation and in several command-line help strings.
 
 ## [0.3.0] - 2026-09-20
 
