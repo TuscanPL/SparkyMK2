@@ -56,5 +56,4 @@ package() {
   install -Dm644 "$icons/128x128.png" "$hicolor/128x128/apps/sparkymk2.png"
   install -Dm644 "$icons/128x128@2x.png" "$hicolor/256x256/apps/sparkymk2.png"
   install -Dm644 "$icons/icon.png" "$hicolor/512x512/apps/sparkymk2.png"
-  install -Dm644 "$icons/icon.svg" "$hicolor/scalable/apps/sparkymk2.svg"
 }

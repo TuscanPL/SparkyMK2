@@ -25,6 +25,10 @@ First public release.
 - `sp404`: status, projects, pads and parameters, sample import and export, project
   backup and restore, pattern export to MIDI, bounce and MULTIPAD rendering.
 
+### Credits
+
+- The app icon is [Sampler icons created by Magnific - Flaticon](https://www.flaticon.com/free-icons/sampler).
+
 ### Protocol
 
 - USB protocol and file formats documented in `docs/re/`, verified on firmware 5.52.

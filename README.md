@@ -221,6 +221,11 @@ Please read [docs/clean-room.md](docs/clean-room.md) before contributing.
   - The meaning of some status fields
 - **Plugin build** (VST3/CLAP/LV2), later.
 
+## Credits
+
+The app icon is [Sampler icons created by Magnific - Flaticon](https://www.flaticon.com/free-icons/sampler),
+used under Flaticon's free license, which asks for this credit.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Icon from "./Icon.vue";
+import logo from "../assets/sparkymk2.png";
 import { bpm, storage } from "../format";
 import { disconnect, refresh, selectProject, store, type Tab } from "../store";
 
@@ -24,7 +25,7 @@ function onProject(event: Event) {
 <template>
   <header class="topbar">
     <div class="brand">
-      <span class="logo"><Icon name="spark" :size="15" /></span>
+      <img class="logo" :src="logo" alt="" width="26" height="26" />
       <span>SparkyMK2</span>
     </div>
 
@@ -98,11 +99,7 @@ function onProject(event: Event) {
 .logo {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
-  display: grid;
-  place-items: center;
-  color: #1b1405;
-  background: linear-gradient(135deg, #ffc15e, #ff8f1f);
+  display: block;
 }
 
 .tabs {

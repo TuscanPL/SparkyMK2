@@ -1,0 +1,5 @@
+The SparkyMK2 icon in this folder is "Sampler" by Magnific, from Flaticon:
+https://www.flaticon.com/free-icons/sampler
+
+Flaticon's free license asks that the icon be credited wherever it is used;
+the credit is in the project README.

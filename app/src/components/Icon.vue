@@ -4,7 +4,6 @@ defineProps<{ name: keyof typeof paths; size?: number }>();
 
 <script lang="ts">
 const paths = {
-  spark: "M13 2 4 14h7l-1 8 9-12h-7l1-8z",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
   play: "M7 4.5v15l12-7.5-12-7.5z",
   lock: "M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z",
