@@ -79,6 +79,11 @@ export interface Conversion {
   threshold: number;
   dither: Dither;
   invert: boolean;
+  /** Multiplies whatever scale `fit` chose; 1 leaves the image framed as it lands. */
+  zoom: number;
+  /** Shift of the image within the display, in device pixels. */
+  offsetX: number;
+  offsetY: number;
 }
 
 export const DEFAULT_CONVERSION: Conversion = {
@@ -88,7 +93,13 @@ export const DEFAULT_CONVERSION: Conversion = {
   threshold: 128,
   dither: "floyd",
   invert: false,
+  zoom: 1,
+  offsetX: 0,
+  offsetY: 0,
 };
+
+/** Framing only, for putting an image back where it started. */
+export const DEFAULT_FRAMING = { zoom: 1, offsetX: 0, offsetY: 0 };
 
 const BAYER_2 = [
   [0, 2],
@@ -119,7 +130,7 @@ const BAYER_4 = bayer(4);
 const BAYER_8 = bayer(8);
 
 /** Grey levels 0…255 for an image scaled into the display, composited over black. */
-function greyscale(source: CanvasImageSource, sw: number, sh: number, fit: Fit): Float32Array {
+function greyscale(source: CanvasImageSource, sw: number, sh: number, c: Conversion): Float32Array {
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -127,14 +138,21 @@ function greyscale(source: CanvasImageSource, sw: number, sh: number, fit: Fit):
   if (!ctx) return new Float32Array(WIDTH * HEIGHT);
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  if (fit === "stretch") {
-    ctx.drawImage(source, 0, 0, WIDTH, HEIGHT);
+  // Whatever is left uncovered stays black, so panning past an edge fades out rather
+  // than smearing the last row of pixels.
+  const zoom = c.zoom > 0 ? c.zoom : 1;
+  let w: number;
+  let h: number;
+  if (c.fit === "stretch") {
+    w = WIDTH * zoom;
+    h = HEIGHT * zoom;
   } else {
-    const scale = fit === "cover" ? Math.max(WIDTH / sw, HEIGHT / sh) : Math.min(WIDTH / sw, HEIGHT / sh);
-    const w = sw * scale;
-    const h = sh * scale;
-    ctx.drawImage(source, (WIDTH - w) / 2, (HEIGHT - h) / 2, w, h);
+    const base =
+      c.fit === "cover" ? Math.max(WIDTH / sw, HEIGHT / sh) : Math.min(WIDTH / sw, HEIGHT / sh);
+    w = sw * base * zoom;
+    h = sh * base * zoom;
   }
+  ctx.drawImage(source, (WIDTH - w) / 2 + c.offsetX, (HEIGHT - h) / 2 + c.offsetY, w, h);
   const data = ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
   const grey = new Float32Array(WIDTH * HEIGHT);
   for (let i = 0; i < grey.length; i++) {
@@ -202,7 +220,7 @@ function ordered(grey: Float32Array, threshold: number, matrix: number[][]): Pix
 
 /** Convert a loaded image to the display's one-bit pixels. */
 export function convert(source: CanvasImageSource, sw: number, sh: number, c: Conversion): Pixels {
-  const grey = greyscale(source, sw, sh, c.fit);
+  const grey = greyscale(source, sw, sh, c);
   adjust(grey, c.brightness, c.contrast);
   let px: Pixels;
   switch (c.dither) {

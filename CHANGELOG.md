@@ -5,6 +5,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- Screens tab: a Move tool frames a loaded image. Drag it around, scroll to zoom, and
+  everything outside the 128 × 64 screen is cropped off, so a detail of a much larger
+  picture can be used. Recentre puts it back.
+
 ## [0.4.1] - 2026-09-20
 
 0.4.0 was tagged but never released, so everything below ships for the first time here.

@@ -5,6 +5,7 @@ import ScreenCanvas from "../components/ScreenCanvas.vue";
 import { errorText } from "../api";
 import {
   DEFAULT_CONVERSION,
+  DEFAULT_FRAMING,
   HEIGHT,
   SCREEN_SAVER_SLOTS,
   STARTUP_SLOTS,
@@ -37,7 +38,7 @@ const sources = shallowReactive<Record<string, Source | undefined>>({});
 const undo = shallowReactive<Record<string, Pixels[]>>({});
 
 const selected = ref(STARTUP_SLOTS[0]);
-const tool = ref<"draw" | "erase">("draw");
+const tool = ref<"draw" | "erase" | "move">("draw");
 const brush = ref(1);
 const conversion = reactive({ ...DEFAULT_CONVERSION });
 const fillGroup = ref(false);
@@ -70,6 +71,9 @@ function dirty(slot: string): boolean {
   return edit !== undefined && !samePixels(edit, baseline(slot));
 }
 
+const framing = computed(() => sources[selected.value] !== undefined);
+/** Dragging pans the image while Move is picked and there is an image to pan. */
+const panning = computed(() => tool.value === "move" && framing.value);
 const changed = computed(() => groups.flatMap((g) => g.slots).filter(dirty));
 const group = computed(() => groups.find((g) => g.slots.includes(selected.value)) ?? groups[0]);
 const selectedInfo = computed(() => info(selected.value));
@@ -134,9 +138,19 @@ function stamp(px: Pixels, x: number, y: number) {
   }
 }
 
+/** Where the pointer was last seen while panning, in device pixels. */
+let panFrom: { x: number; y: number } | null = null;
+
 function startStroke(event: PointerEvent) {
   // Left button draws, right button erases; ignore the rest.
   if (playing.value || (event.button !== 0 && event.button !== 2)) return;
+  if (tool.value === "move") {
+    // Move never paints: with no image loaded there is simply nothing to drag.
+    if (!panning.value) return;
+    panFrom = pointAt(event);
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    return;
+  }
   strokeValue = event.button === 2 || tool.value === "erase" ? 0 : 1;
   pushUndo(selected.value);
   const px = Uint8Array.from(pixels(selected.value));
@@ -149,6 +163,13 @@ function startStroke(event: PointerEvent) {
 function continueStroke(event: PointerEvent) {
   const el = event.currentTarget as HTMLElement;
   if (playing.value || !el.hasPointerCapture(event.pointerId)) return;
+  if (panFrom) {
+    const now = pointAt(event);
+    conversion.offsetX += now.x - panFrom.x;
+    conversion.offsetY += now.y - panFrom.y;
+    panFrom = now;
+    return;
+  }
   const px = Uint8Array.from(pixels(selected.value));
   const { x, y } = pointAt(event);
   stamp(px, x, y);
@@ -158,6 +179,19 @@ function continueStroke(event: PointerEvent) {
 function endStroke(event: PointerEvent) {
   const el = event.currentTarget as HTMLElement;
   if (el.hasPointerCapture(event.pointerId)) el.releasePointerCapture(event.pointerId);
+  panFrom = null;
+}
+
+/** The wheel zooms about the middle while framing, which is what a crop wants. */
+function onWheel(event: WheelEvent) {
+  if (!panning.value || playing.value) return;
+  event.preventDefault();
+  const step = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+  conversion.zoom = Math.min(20, Math.max(0.1, conversion.zoom * step));
+}
+
+function resetFraming() {
+  Object.assign(conversion, DEFAULT_FRAMING);
 }
 
 function clear(value: 0 | 1) {
@@ -187,6 +221,7 @@ async function onFile(event: Event) {
   if (!file) return;
   try {
     const image = await loadImage(file);
+    Object.assign(conversion, DEFAULT_FRAMING);
     const targets = fillGroup.value ? group.value.slots : [selected.value];
     for (const slot of targets) {
       pushUndo(slot);
@@ -286,17 +321,21 @@ async function putBackOriginal() {
       <div class="stage">
         <ScreenCanvas
           class="board"
-          :class="{ playing }"
+          :class="{ playing, panning }"
           :pixels="shown"
           :scale="EDIT_SCALE"
           @pointerdown="startStroke"
           @pointermove="continueStroke"
           @pointerup="endStroke"
           @pointercancel="endStroke"
+          @wheel="onWheel"
           @contextmenu.prevent
         />
         <p v-if="playing" class="muted note">
           Preview only — the device runs the animation at its own speed.
+        </p>
+        <p v-else-if="panning" class="muted note">
+          Drag to move the image, scroll to zoom. Anything outside the screen is cropped off.
         </p>
         <p v-else class="muted note">Drag to draw, right-drag to erase.</p>
       </div>
@@ -305,6 +344,14 @@ async function putBackOriginal() {
         <div class="tool-group">
           <button :class="{ active: tool === 'draw' }" :disabled="playing" @click="tool = 'draw'">Draw</button>
           <button :class="{ active: tool === 'erase' }" :disabled="playing" @click="tool = 'erase'">Erase</button>
+          <button
+            :class="{ active: tool === 'move' }"
+            :disabled="playing || !framing"
+            :title="framing ? 'Drag the loaded image to frame it' : 'Load an image to frame it'"
+            @click="tool = 'move'"
+          >
+            Move
+          </button>
         </div>
         <label class="field">
           <span>Brush</span>
@@ -354,6 +401,18 @@ async function putBackOriginal() {
             </select>
           </label>
           <label class="field slider">
+            <span>Zoom</span>
+            <input
+              v-model.number="conversion.zoom"
+              type="range"
+              min="0.1"
+              max="8"
+              step="0.05"
+              :disabled="!sources[selected]"
+            />
+            <span class="mono">{{ conversion.zoom.toFixed(2) }}×</span>
+          </label>
+          <label class="field slider">
             <span>Threshold</span>
             <input v-model.number="conversion.threshold" type="range" min="0" max="255" :disabled="!sources[selected]" />
             <span class="mono">{{ conversion.threshold }}</span>
@@ -372,10 +431,12 @@ async function putBackOriginal() {
             <input v-model="conversion.invert" type="checkbox" :disabled="!sources[selected]" />
             <span>Invert</span>
           </label>
+          <button class="small" :disabled="!sources[selected]" @click="resetFraming">Recentre</button>
         </div>
         <p v-if="!sources[selected]" class="hint muted">
-          Load a PNG, JPEG, GIF, WebP or BMP to use these. Moving them re-converts it, replacing
-          anything drawn by hand — Undo brings it back.
+          Load a PNG, JPEG, GIF, WebP or BMP to use these. Pick Move to drag the image around and
+          crop the part you want. Moving these re-converts it, replacing anything drawn by hand —
+          Undo brings it back.
         </p>
       </div>
     </div>
@@ -523,6 +584,14 @@ async function putBackOriginal() {
 .board.playing {
   cursor: default;
   border-color: var(--accent-line);
+}
+
+.board.panning {
+  cursor: grab;
+}
+
+.board.panning:active {
+  cursor: grabbing;
 }
 
 .note {

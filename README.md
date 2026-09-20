@@ -58,7 +58,8 @@ Feature-by-feature progress against the official app is tracked in
 
 **Display images**
 - Edit a project's startup animation and screen saver: convert any image to the device's
-  128 x 64 black and white screen, or draw it pixel by pixel, then write it to the card.
+  128 x 64 black and white screen, panning and zooming to crop the part you want, or draw
+  it pixel by pixel, then write it to the device.
 
 **Patterns**
 - List patterns.
