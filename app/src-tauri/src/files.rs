@@ -7,7 +7,9 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
+use sp404_formats::{Sample, audio, wav};
 use sp404_proto::fileapi;
+use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::AppState;
@@ -52,7 +54,7 @@ fn join(dir: &str, name: &str) -> String {
 }
 
 /// Turn a volume name and a path inside it into a path the device's file API takes.
-fn qualify(volume: &str, path: &str) -> Result<String, Failure> {
+pub(crate) fn qualify(volume: &str, path: &str) -> Result<String, Failure> {
     if path.split(['/', '\\']).any(|part| part == "..") {
         return Err(Failure::Other(format!(
             "{path} is not a path on the device"
@@ -272,6 +274,63 @@ pub async fn create_dir(
     .await
 }
 
+/// Largest file worth pulling over just to hear it.
+const PREVIEW_MAX_BYTES: u64 = 64 * 1024 * 1024;
+/// Seconds of audio handed to the webview; long samples are cut short.
+const PREVIEW_MAX_SECONDS: usize = 30;
+
+fn extension(path: &str) -> String {
+    file_name(path)
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+/// Whether a name looks like something [`preview_audio`] can decode.
+pub fn playable(name: &str) -> bool {
+    let ext = extension(name);
+    ext == "smp" || audio::EXTENSIONS.contains(&ext.as_str())
+}
+
+/// Decode a sound on the device into a WAV the webview can play. The device can only
+/// preview its own pads, so auditioning a file means playing it on this computer.
+#[tauri::command]
+pub async fn preview_audio(
+    state: State<'_, AppState>,
+    volume: String,
+    path: String,
+) -> CmdResult<Response> {
+    with_device(&state, move |dev| {
+        let target = qualify(&volume, &path)?;
+        let ext = extension(&path);
+        if !playable(&path) {
+            return Err(Failure::Other(format!(
+                "{} is not a sound this app can play",
+                file_name(&path)
+            )));
+        }
+        if let Some(stat) = dev.stat(&target)? {
+            if u64::from(stat.size) > PREVIEW_MAX_BYTES {
+                return Err(Failure::Other(format!(
+                    "{} is too big to preview",
+                    file_name(&path)
+                )));
+            }
+        }
+        let bytes = dev.read_file(&target)?;
+        // The device's own samples are RFWV, not a format the decoder knows.
+        let mut sample = if ext == "smp" {
+            Sample::from_smp(&bytes)?
+        } else {
+            audio::read_bytes(bytes, &ext)?.sample
+        };
+        let limit = PREVIEW_MAX_SECONDS * 48_000 * usize::from(sample.channels.max(1));
+        sample.samples.truncate(limit);
+        Ok(Response::new(wav::to_bytes(&sample)?))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,6 +356,16 @@ mod tests {
         assert!(qualify("internal", "ROLAND/../../etc/passwd").is_err());
         assert!(qualify("card", "IMPORT/..").is_err());
         assert!(qualify("nowhere", "IMPORT").is_err());
+    }
+
+    #[test]
+    fn spots_sounds_it_can_play() {
+        assert!(playable("IMPORT/kick.WAV"));
+        assert!(playable("BANK1-01.SMP"));
+        assert!(playable("loop.flac"));
+        assert!(!playable("SP404MKII_APP0.bin"));
+        assert!(!playable("PADCONF.BIN"));
+        assert!(!playable("noextension"));
     }
 
     #[test]

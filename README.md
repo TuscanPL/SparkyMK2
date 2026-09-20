@@ -39,9 +39,12 @@ Feature-by-feature progress against the official app is tracked in
   `BKUP`). Copy folders on or off, rename, delete, make folders, at about 2 MB/s.
 - Drop sounds straight into the card's `IMPORT` folder, where the SP-404MKII's own IMPORT
   browser finds them, without taking the card out.
+- Audition anything on the device before using it: audio on the card and the device's own
+  samples, played through the computer.
 
 **Samples and pads**
-- Import WAV, AIFF, FLAC or MP3 at any sample rate. Audio is converted to the device's
+- Import WAV, AIFF, FLAC or MP3 at any sample rate, from the computer or by dragging a
+  sound off the SD card onto a pad. Audio is converted to the device's
   48 kHz 16-bit format; mono stays mono.
 - Export pad samples to WAV.
 - Read and set every pad parameter: start/end, loop top, level, pitch, time stretch,

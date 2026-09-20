@@ -78,6 +78,7 @@ export const store = reactive({
   dialog: null as Dialog | null,
   prefs: {
     detectBpm: savedPrefs.detectBpm ?? true,
+    importOpen: savedPrefs.importOpen ?? true,
     bpmRange: savedPrefs.bpmRange ?? 0,
   },
   toasts: [] as Toast[],
@@ -611,6 +612,39 @@ export async function importFiles(paths: string[], start: number) {
     }
   }
   if (store.selectedPad === null) await selectPad(targets[0].index);
+}
+
+/** Import one sound that is already on the device onto a pad. */
+export async function importFromDevice(index: number, volume: Volume, remote: string) {
+  const blocked = editBlock(index);
+  if (blocked) {
+    notify(blocked);
+    return;
+  }
+  const name = remote.split("/").pop() ?? remote;
+  if (store.pads[index]?.hasSample) {
+    const ok = await confirmAction(
+      `Replace ${padLabel(index)}?`,
+      `${padLabel(index)} already holds a sample. Importing ${name} replaces it. This can't be undone.`,
+      "Replace",
+    );
+    if (!ok) return;
+  }
+  store.working[index] = "Importing";
+  try {
+    const result = await edit(() =>
+      api.importFromDevice(index, volume, remote, store.prefs.detectBpm, store.prefs.bpmRange),
+    );
+    if (!result) return;
+    dropWaveform(index);
+    applyPad(result.state);
+    if (store.selectedPad === index || store.selectedPad === null) await selectPad(index);
+    if (store.prefs.detectBpm && result.detectedBpm === null) {
+      notify(`${padLabel(index)}: no tempo detected`, "info");
+    }
+  } finally {
+    delete store.working[index];
+  }
 }
 
 export async function analyzeBpm(index: number, mode: "detect" | "length") {

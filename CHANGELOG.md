@@ -13,6 +13,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   progress, and files can be dragged in from the file manager.
 - Audio copied into the card's `IMPORT` folder appears in the SP-404MKII's own IMPORT
   browser, so sample packs can be loaded without taking the card out.
+- Samples tab: the Import panel folds away, and holds a browser of the card's sounds.
+  Drag one onto a pad to import it straight from the card, with no round trip through the
+  computer's disk.
+- Preview any sound on the device, in the Files tab or the Import browser: audio files on
+  the card and the device's own `.SMP` samples alike. The protocol can only preview a
+  pad, so these play through the computer's speakers.
 - `sp404 put`, `rm`, `mv`, `mkdir` and `rmdir` do the same from the command line. Paths
   prefixed `SD:` address the card; plain paths address the device's own storage.
 - The file API turns out to serve two filesystems, not one: `/SP404REMOTE//` is the

@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon.vue";
 import { errorText, type CardEntry, type Transfer, type Volume } from "../api";
 import { bytes as formatBytes, storage } from "../format";
+import { playPreview, playable, preview, stopPreview } from "../preview";
 import {
   ask,
   createCardFolder,
@@ -33,7 +34,10 @@ onMounted(async () => {
   if (!store.card) await loadCard("card", "");
 });
 
-onUnmounted(() => unlisten?.());
+onUnmounted(() => {
+  unlisten?.();
+  stopPreview();
+});
 
 const volume = computed<Volume>(() => store.card?.volume ?? "card");
 const path = computed(() => store.card?.path ?? "");
@@ -58,6 +62,7 @@ function isProjectFile(entry: CardEntry): boolean {
 async function go(to: string, to_volume: Volume = volume.value) {
   selected.value = null;
   renaming.value = null;
+  stopPreview();
   await loadCard(to_volume, to);
 }
 
@@ -68,6 +73,7 @@ function up() {
 
 function openEntry(entry: CardEntry) {
   if (entry.isDir) go(entry.path);
+  else if (playable(entry.name)) playPreview(volume.value, entry.path);
 }
 
 async function onUpload() {
@@ -181,6 +187,15 @@ const percent = computed(() => {
         Copy to {{ volume === "card" ? "card" : "device" }}…
       </button>
       <button :disabled="store.pending > 0" @click="onNewFolder">New folder</button>
+      <button
+        :class="{ active: selected && preview.playing === selected.path }"
+        :disabled="!selected || selected.isDir || !playable(selected.name)"
+        @click="selected && playPreview(volume, selected.path)"
+      >
+        <span v-if="selected && preview.loading === selected.path" class="spinner" />
+        <Icon v-else :name="selected && preview.playing === selected.path ? 'stop' : 'play'" />
+        {{ selected && preview.playing === selected.path ? "Stop" : "Preview" }}
+      </button>
       <div class="spacer" />
       <button :disabled="!selected || store.pending > 0" @click="onDownload">
         Save {{ selected?.isDir ? "folder" : "file" }} to computer…
@@ -199,7 +214,7 @@ const percent = computed(() => {
         v-for="entry in store.card?.entries ?? []"
         :key="entry.path"
         class="row"
-        :class="{ active: selected?.path === entry.path }"
+        :class="{ active: selected?.path === entry.path, playing: preview.playing === entry.path }"
         @click="selected = entry"
         @dblclick="openEntry(entry)"
       >
@@ -349,6 +364,15 @@ const percent = computed(() => {
 .row.active {
   background: var(--accent-soft);
   color: var(--text);
+}
+
+.row.playing .name {
+  color: var(--accent);
+}
+
+button.active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .name {

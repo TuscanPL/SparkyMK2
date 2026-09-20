@@ -33,7 +33,8 @@ function click(index: number) {
           filled: props.filled(padIndex(props.bank, n)),
           selected: props.selected === padIndex(props.bank, n),
           dragging: drag.from === padIndex(props.bank, n),
-          target: props.droppable && drag.over === padIndex(props.bank, n) && drag.from !== padIndex(props.bank, n),
+          target:
+            props.droppable && drag.over === padIndex(props.bank, n) && drag.from !== padIndex(props.bank, n),
         }"
         @pointerdown="emit('press', $event, padIndex(props.bank, n))"
         @click="click(padIndex(props.bank, n))"

@@ -109,6 +109,8 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 | Copy files and folders either way | ✅ `open`/`read`/`write`, ~2 MB/s |
 | Rename, delete, mkdir, rmdir | ✅ ops `17`, `0A`, `09`, `0B` |
 | Stage audio for the device's own IMPORT browser | ✅ write into the card's `IMPORT/` |
+| Preview a sound on the device before importing | ✅ an extra; decoded host-side and played on the computer, since the protocol previews only pads |
+| Drag a sound off the card onto a pad | ✅ an extra; read, decode and `import_smp` without touching the computer's disk |
 
 ## Screens tab (not in the official app)
 

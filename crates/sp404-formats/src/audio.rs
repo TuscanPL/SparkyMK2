@@ -40,12 +40,29 @@ impl Imported {
 /// Decode an audio file into 48 kHz 16-bit mono or stereo audio.
 pub fn read(path: impl AsRef<Path>) -> Result<Imported, FormatError> {
     let path = path.as_ref();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let file = File::open(path)?;
+    decode(
+        MediaSourceStream::new(Box::new(file), Default::default()),
+        ext,
+    )
+}
+
+/// Decode audio already in memory, as it arrives from the device's file API. `ext` helps
+/// the prober pick a format and may be empty.
+pub fn read_bytes(bytes: Vec<u8>, ext: &str) -> Result<Imported, FormatError> {
+    let source = std::io::Cursor::new(bytes);
+    decode(
+        MediaSourceStream::new(Box::new(source), Default::default()),
+        ext,
+    )
+}
+
+fn decode(stream: MediaSourceStream, ext: &str) -> Result<Imported, FormatError> {
     let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+    if !ext.is_empty() {
         hint.with_extension(ext);
     }
-    let file = File::open(path)?;
-    let stream = MediaSourceStream::new(Box::new(file), Default::default());
     let mut format = symphonia::default::get_probe().probe(
         &hint,
         stream,
@@ -167,6 +184,23 @@ mod tests {
 
     fn temp(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("sp404-audio-{}-{name}", std::process::id()))
+    }
+
+    /// The preview path: a sound arrives from the device as bytes, is decoded, and goes
+    /// back out as a WAV for the webview.
+    #[test]
+    fn decodes_from_memory_and_back_to_wav() {
+        let sample = Sample {
+            channels: 2,
+            samples: (0..4800).map(|i| ((i % 400) as i16 - 200) * 60).collect(),
+        };
+        let wav = crate::wav::to_bytes(&sample).unwrap();
+        let imported = read_bytes(wav.clone(), "wav").unwrap();
+        assert_eq!(imported.source_rate, SAMPLE_RATE);
+        assert_eq!(imported.source_channels, 2);
+        assert_eq!(imported.sample.samples, sample.samples);
+        // An empty hint still works: the prober falls back to sniffing the header.
+        assert_eq!(read_bytes(wav, "").unwrap().sample.samples, sample.samples);
     }
 
     fn write_wav(

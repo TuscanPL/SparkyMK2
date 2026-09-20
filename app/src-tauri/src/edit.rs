@@ -245,36 +245,79 @@ pub async fn import_audio(
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // Keep the printable part of the file name; the device accepts ASCII only.
-        let name: String = stem
-            .chars()
-            .filter(|c| (' '..='~').contains(c))
-            .take(SAMPLE_NAME_LEN)
-            .collect();
-        let name = if name.trim().is_empty() {
-            "Sample".to_string()
-        } else {
-            name
-        };
-        let project = dev.current_project()? + 1;
-        dev.import_smp(project, pad, &imported.sample.to_smp(), &name)?;
-        let detected_bpm = if detect_bpm {
-            let detected = detect_tempo(&imported.sample, bpm_range);
-            if let Some(bpm) = detected {
-                dev.set_param(BPM, Target::Pad(pad), bpm)?;
-            }
-            detected
-        } else {
-            None
-        };
-        Ok(ImportResult {
-            state: read_pad(dev, pad)?,
-            source_rate: imported.source_rate,
-            source_channels: imported.source_channels,
-            detected_bpm,
-        })
+        store_import(dev, pad, imported, &stem, detect_bpm, bpm_range)
     })
     .await
+}
+
+/// Import a sound already on the device (an SD card file) straight onto a pad, without
+/// a round trip through the computer's disk.
+#[tauri::command]
+pub async fn import_from_device(
+    state: State<'_, AppState>,
+    pad: u16,
+    volume: String,
+    remote: String,
+    detect_bpm: bool,
+    bpm_range: u8,
+) -> CmdResult<ImportResult> {
+    with_device(&state, move |dev| {
+        let pad = pad_index(pad)?;
+        let name = remote.rsplit('/').next().unwrap_or(&remote).to_string();
+        let (stem, ext) = match name.rsplit_once('.') {
+            Some((stem, ext)) => (stem.to_string(), ext.to_ascii_lowercase()),
+            None => (name.clone(), String::new()),
+        };
+        if !audio::EXTENSIONS.contains(&ext.as_str()) {
+            return Err(
+                format!("{name} isn't a supported audio file (WAV, AIFF, FLAC or MP3)").into(),
+            );
+        }
+        check_unprotected(dev, pad)?;
+        let bytes = dev.read_file(&crate::files::qualify(&volume, &remote)?)?;
+        let imported = audio::read_bytes(bytes, &ext)?;
+        store_import(dev, pad, imported, &stem, detect_bpm, bpm_range)
+    })
+    .await
+}
+
+/// Write a decoded sound to a pad and, if asked, detect and store its tempo.
+fn store_import(
+    dev: &sp404_device::Device,
+    pad: PadIndex,
+    imported: audio::Imported,
+    stem: &str,
+    detect_bpm: bool,
+    bpm_range: u8,
+) -> Result<ImportResult, Failure> {
+    // Keep the printable part of the file name; the device accepts ASCII only.
+    let name: String = stem
+        .chars()
+        .filter(|c| (' '..='~').contains(c))
+        .take(SAMPLE_NAME_LEN)
+        .collect();
+    let name = if name.trim().is_empty() {
+        "Sample".to_string()
+    } else {
+        name
+    };
+    let project = dev.current_project()? + 1;
+    dev.import_smp(project, pad, &imported.sample.to_smp(), &name)?;
+    let detected_bpm = if detect_bpm {
+        let detected = detect_tempo(&imported.sample, bpm_range);
+        if let Some(bpm) = detected {
+            dev.set_param(BPM, Target::Pad(pad), bpm)?;
+        }
+        detected
+    } else {
+        None
+    };
+    Ok(ImportResult {
+        state: read_pad(dev, pad)?,
+        source_rate: imported.source_rate,
+        source_channels: imported.source_channels,
+        detected_bpm,
+    })
 }
 
 fn detect_tempo(sample: &Sample, preset: u8) -> Option<i32> {

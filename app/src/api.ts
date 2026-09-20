@@ -173,6 +173,7 @@ export const api = {
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
   screens: () => invoke<ScreenImages>("screens"),
   listVolume: (volume: Volume, path: string) => invoke<CardListing>("list_volume", { volume, path }),
+  previewAudio: (volume: Volume, path: string) => invoke<ArrayBuffer>("preview_audio", { volume, path }),
 
   setPadParam: (pad: number, name: string, value: number) =>
     invoke<PadState>("set_pad_param", { pad, name, value }),
@@ -184,6 +185,8 @@ export const api = {
     invoke<void>("move_sample", { from, to, exchange }),
   importAudio: (pad: number, path: string, detectBpm: boolean, bpmRange: number) =>
     invoke<ImportResult>("import_audio", { pad, path, detectBpm, bpmRange }),
+  importFromDevice: (pad: number, volume: Volume, remote: string, detectBpm: boolean, bpmRange: number) =>
+    invoke<ImportResult>("import_from_device", { pad, volume, remote, detectBpm, bpmRange }),
   analyzeBpm: (pad: number, mode: "detect" | "length", bpmRange: number) =>
     invoke<BpmResult>("analyze_bpm", { pad, mode, bpmRange }),
   setGlobalParam: (name: string, value: number) => invoke<Status>("set_global_param", { name, value }),

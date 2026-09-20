@@ -29,7 +29,7 @@ watch(
 </script>
 
 <template>
-  <div class="app" :class="{ 'is-dragging': drag.from >= 0 }">
+  <div class="app" :class="{ 'is-dragging': drag.from >= 0 || !!drag.sound }">
     <TopBar />
     <div v-if="store.connected && store.status?.workingMode === 4" class="banner">
       The SP-404MKII is showing a menu. Leave it on the device to edit from here.
@@ -45,6 +45,9 @@ watch(
     <div v-if="drag.from >= 0" class="ghost" :style="{ left: `${drag.x + 12}px`, top: `${drag.y + 12}px` }">
       <span class="mono">{{ padLabel(drag.from) }}</span>
       {{ store.pads[drag.from]?.name }}
+    </div>
+    <div v-else-if="drag.sound" class="ghost" :style="{ left: `${drag.x + 12}px`, top: `${drag.y + 12}px` }">
+      {{ drag.sound.name }}
     </div>
     <ConfirmDialog />
     <Toasts />

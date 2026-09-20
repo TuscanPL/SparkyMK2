@@ -1,7 +1,8 @@
 // Dragging pads onto other pads, and dropping audio files from the file manager.
 import { reactive } from "vue";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { editBlock, importFiles, moveSample, store, uploadToCard } from "./store";
+import { editBlock, importFiles, importFromDevice, moveSample, store, uploadToCard } from "./store";
+import type { Volume } from "./api";
 
 const THRESHOLD = 5;
 const BANK_HOVER_MS = 350;
@@ -15,6 +16,8 @@ export const drag = reactive({
   over: -1,
   /** Files are being dragged over the window. */
   files: false,
+  /** A sound being dragged out of the card browser onto a pad. */
+  sound: null as { volume: Volume; path: string; name: string } | null,
 });
 
 let justDragged = false;
@@ -78,6 +81,31 @@ export function pressPad(event: PointerEvent, index: number) {
       if (editBlock(over)) return;
       moveSample(from, over);
     }
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+/** Start dragging a sound off the card browser; it becomes a drag once it moves. */
+export function pressSound(event: PointerEvent, sound: { volume: Volume; path: string; name: string }) {
+  if (event.button !== 0) return;
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const move = (e: PointerEvent) => {
+    if (!drag.sound && Math.hypot(e.clientX - startX, e.clientY - startY) < THRESHOLD) return;
+    drag.sound = sound;
+    track(e.clientX, e.clientY);
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    if (!drag.sound) return;
+    const { over } = drag;
+    drag.sound = null;
+    endHover();
+    justDragged = true;
+    window.setTimeout(() => (justDragged = false), 0);
+    if (over >= 0 && !editBlock(over)) importFromDevice(over, sound.volume, sound.path);
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);

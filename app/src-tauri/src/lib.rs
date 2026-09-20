@@ -40,6 +40,7 @@ pub fn run() {
             edit::pad_operation,
             edit::move_sample,
             edit::import_audio,
+            edit::import_from_device,
             edit::analyze_bpm,
             edit::set_global_param,
             edit::rename_project,
@@ -53,6 +54,7 @@ pub fn run() {
             files::delete_path,
             files::rename_path,
             files::create_dir,
+            files::preview_audio,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SparkyMK2");

@@ -4,6 +4,7 @@ import BankStrip from "../components/BankStrip.vue";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import PadGrid from "../components/PadGrid.vue";
+import SoundBrowser from "../components/SoundBrowser.vue";
 import ParamField from "../components/ParamField.vue";
 import WaveformView from "../components/WaveformView.vue";
 import { api } from "../api";
@@ -99,21 +100,27 @@ async function commitChops(points: number[]) {
           </template>
         </PadGrid>
 
-        <div class="import panel">
-          <div class="label">Import</div>
-          <p class="muted hint">
-            {{ drag.files ? "Drop on a pad to import. Several files fill the following pads." : "Drag audio files from your file manager onto a pad. Drag a pad onto another to move or swap it." }}
-          </p>
-          <label class="row">
-            <input v-model="store.prefs.detectBpm" type="checkbox" @change="savePrefs" />
-            Detect BPM after import
-          </label>
-          <label class="row">
-            <span class="muted">BPM range</span>
-            <select v-model.number="store.prefs.bpmRange" @change="savePrefs">
-              <option v-for="[value, label] in BPM_RANGES" :key="value" :value="value">{{ label }}</option>
-            </select>
-          </label>
+        <div class="import panel" :class="{ open: store.prefs.importOpen }">
+          <button class="toggle" @click="store.prefs.importOpen = !store.prefs.importOpen; savePrefs()">
+            <Icon name="chevron" :class="{ turned: store.prefs.importOpen }" />
+            <span class="label">Import</span>
+          </button>
+          <template v-if="store.prefs.importOpen">
+            <SoundBrowser />
+            <p class="muted hint">
+              {{ drag.files ? "Drop on a pad to import. Several files fill the following pads." : "Audio files from your file manager can be dropped on a pad too." }}
+            </p>
+            <label class="row">
+              <input v-model="store.prefs.detectBpm" type="checkbox" @change="savePrefs" />
+              Detect BPM after import
+            </label>
+            <label class="row">
+              <span class="muted">BPM range</span>
+              <select v-model.number="store.prefs.bpmRange" @change="savePrefs">
+                <option v-for="[value, label] in BPM_RANGES" :key="value" :value="value">{{ label }}</option>
+              </select>
+            </label>
+          </template>
         </div>
       </section>
 
@@ -256,6 +263,33 @@ async function commitChops(points: number[]) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: none;
+  background: none;
+  align-self: flex-start;
+}
+
+.toggle .label {
+  color: var(--muted);
+}
+
+.toggle:hover .label {
+  color: var(--text);
+}
+
+.toggle svg {
+  color: var(--faint);
+  transition: transform 0.15s;
+}
+
+.toggle svg.turned {
+  transform: rotate(90deg);
 }
 
 .row {
