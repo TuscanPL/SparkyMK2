@@ -3199,7 +3199,7 @@ dependencies = [
 
 [[package]]
 name = "sp404-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3214,7 +3214,7 @@ dependencies = [
 
 [[package]]
 name = "sp404-device"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "log",
  "serialport",
@@ -3224,14 +3224,14 @@ dependencies = [
 
 [[package]]
 name = "sp404-dsp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "realfft",
 ]
 
 [[package]]
 name = "sp404-formats"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "audioadapter-buffers",
  "hound",
@@ -3244,14 +3244,14 @@ dependencies = [
 
 [[package]]
 name = "sp404-proto"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "sparkymk2"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "log",
  "serde",

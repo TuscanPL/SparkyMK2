@@ -5,7 +5,7 @@
 # (see docs/releasing.md).
 
 pkgname=sparkymk2
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc='Editor and librarian for the Roland SP-404MKII'
 arch=('x86_64')
