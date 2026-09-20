@@ -7,6 +7,10 @@ samples, pads, patterns and projects on the device over USB.
 > Not affiliated with or endorsed by Roland Corporation. "SP-404MKII" and "Roland" are
 > trademarks of Roland Corporation.
 
+> Vibe coded: an AI assistant wrote most of this, from the protocol notes in
+> [docs/re/](docs/re/) and against real hardware. See
+> [How it was made](#how-it-was-made).
+
 ## Status
 
 **Early, but the core works.** The USB protocol is decoded and documented, and a Rust
@@ -208,6 +212,17 @@ a specification in [docs/re/](docs/re/). The Rust code is written from that spec
 
 The project follows a clean-room process: no Roland code, firmware or assets are included.
 Please read [docs/clean-room.md](docs/clean-room.md) before contributing.
+
+**It is a vibe coded project.** An AI assistant wrote most of the code, working from those
+specifications, and the results were tried on a real SP-404MKII: the command-line tool and
+the app have both driven the device, and `docs/re/` records what the hardware actually
+answered.
+
+The specifications are the part worth keeping. If you would rather not run code written
+that way, [docs/re/](docs/re/) describes the transport, the commands, the parameters and
+the file formats in enough detail to write your own client by hand. Reading what is here
+and reimplementing it yourself is a perfectly good use of this repository, and you are
+welcome to it.
 
 ## Roadmap
 
