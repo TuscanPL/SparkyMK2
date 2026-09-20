@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-20
+
 ### Added
 
 - Files tab: browse both of the device's filesystems over USB and move files either way —
