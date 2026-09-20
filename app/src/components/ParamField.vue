@@ -45,7 +45,47 @@ function setChromatic(bits: number) {
 </script>
 
 <template>
-  <div class="field" :class="`kind-${control.kind}`">
+  <!-- The trigger flags are two rows of their own, so every label lines up on the left
+       and every control ends at the right edge. -->
+  <template v-if="control.kind === 'flags'">
+    <div class="field">
+      <span class="name">{{ view?.label ?? param.name }}</span>
+      <div class="checks">
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="!!(param.value & FLAG.oneShot)"
+            :disabled="disabled"
+            @change="setFlag(FLAG.oneShot, ($event.target as HTMLInputElement).checked)"
+          />
+          One shot
+        </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="!!(param.value & FLAG.fixedVelocity)"
+            :disabled="disabled"
+            @change="setFlag(FLAG.fixedVelocity, ($event.target as HTMLInputElement).checked)"
+          />
+          Fixed velocity
+        </label>
+      </div>
+    </div>
+    <div class="field">
+      <span class="name">Chromatic</span>
+      <select
+        :value="chromatic"
+        :disabled="disabled"
+        @change="setChromatic(Number(($event.target as HTMLSelectElement).value))"
+      >
+        <option :value="0">Mono</option>
+        <option :value="FLAG.chromaticA">Mode 2</option>
+        <option :value="FLAG.chromaticB">Mode 3</option>
+      </select>
+    </div>
+  </template>
+
+  <div v-else class="field" :class="`kind-${control.kind}`">
     <span class="name">{{ view?.label ?? param.name }}</span>
 
     <label v-if="control.kind === 'toggle'" class="switch">
@@ -91,34 +131,6 @@ function setChromatic(bits: number) {
       @blur="commitBpm"
     />
 
-    <div v-else-if="control.kind === 'flags'" class="flags">
-      <label class="check">
-        <input
-          type="checkbox"
-          :checked="!!(param.value & FLAG.oneShot)"
-          :disabled="disabled"
-          @change="setFlag(FLAG.oneShot, ($event.target as HTMLInputElement).checked)"
-        />
-        One shot
-      </label>
-      <label class="check">
-        <input
-          type="checkbox"
-          :checked="!!(param.value & FLAG.fixedVelocity)"
-          :disabled="disabled"
-          @change="setFlag(FLAG.fixedVelocity, ($event.target as HTMLInputElement).checked)"
-        />
-        Fixed velocity
-      </label>
-      <label class="chromatic">
-        Chromatic
-        <select :value="chromatic" :disabled="disabled" @change="setChromatic(Number(($event.target as HTMLSelectElement).value))">
-          <option :value="0">Mono</option>
-          <option :value="FLAG.chromaticA">Mode 2</option>
-          <option :value="FLAG.chromaticB">Mode 3</option>
-        </select>
-      </label>
-    </div>
   </div>
 </template>
 
@@ -129,10 +141,6 @@ function setChromatic(bits: number) {
   align-items: center;
   gap: 10px;
   min-height: 30px;
-}
-
-.field.kind-flags {
-  align-items: start;
 }
 
 .name {
@@ -173,26 +181,19 @@ select,
   font-size: 12.5px;
 }
 
-.flags {
+.checks {
+  /* One line, hugging the right edge like the other controls. The parameter groups are
+     wide enough to hold both at any window size. */
   justify-self: end;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
+  gap: 16px;
 }
 
-.check,
-.chromatic {
+.check {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.chromatic {
-  color: var(--muted);
-}
-
-.chromatic select {
-  color: var(--text);
+  /* Keep "One shot" and "Fixed velocity" whole; the pair wraps instead. */
+  white-space: nowrap;
 }
 </style>

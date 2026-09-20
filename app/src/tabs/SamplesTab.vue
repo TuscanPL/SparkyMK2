@@ -364,7 +364,8 @@ label.row:first-of-type {
 
 .groups {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  /* Wide enough that a group never squeezes the trigger checkboxes onto two lines. */
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 10px;
 }
 
