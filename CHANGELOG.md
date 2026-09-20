@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-20
+
 First public release.
 
 ### Desktop app
