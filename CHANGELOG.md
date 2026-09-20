@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-20
+
 ### Fixed
 
 - Samples tab: the Trigger checkboxes and the Chromatic menu now line up with the rows
