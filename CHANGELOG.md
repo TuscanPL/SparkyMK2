@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-20
+
 ### Fixed
 
 - Leaving a menu on the device now re-reads its state. Edits made on the SP-404MKII
