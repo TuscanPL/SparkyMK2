@@ -67,7 +67,8 @@ enum Command {
     Pads,
     /// Show one pad's parameters.
     Pad { pad: PadIndex },
-    /// List a directory on the card (default: ROLAND/SP-404MKII).
+    /// List a directory (default: ROLAND/SP-404MKII). Prefix with `SD:` for the SD card,
+    /// e.g. `SD:IMPORT`; plain paths address the device's own storage.
     Ls { path: Option<String> },
     /// Download a file from the card.
     Get { remote: String, local: PathBuf },

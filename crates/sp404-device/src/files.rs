@@ -239,7 +239,12 @@ impl Device {
                 Err(e) => break Err(e),
             }
         };
-        self.status_call(fileapi::closedir(dir), "closedir")?;
+        // The SD card's filesystem closes the handle itself once readdir runs out, and
+        // then refuses closedir. The entries are already in hand, so that is not a
+        // failure; a genuine one would only leak a handle until the device restarts.
+        if let Err(e) = self.status_call(fileapi::closedir(dir), "closedir") {
+            log::debug!("closedir on {path}: {e}");
+        }
         result.map(|()| entries)
     }
 }

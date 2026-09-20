@@ -6,8 +6,14 @@
 use crate::ProtoError;
 use crate::septet::{self, Septets};
 
-/// Prefix that routes a path to the device's card.
+/// Prefix that routes a path to the device's own storage, where projects, samples and
+/// the factory library live.
 pub const ROOT: &str = "/SP404REMOTE//";
+
+/// Marks a path as living on the SD card instead: `SD:IMPORT/pack/kick.wav`. The card is
+/// a separate filesystem at the device's real root, holding `IMPORT`, `EXPORT`, `BKUP`
+/// and the firmware images. The device's own IMPORT browser reads `IMPORT` from here.
+pub const CARD: &str = "SD:";
 
 /// Largest data block in one write request or one read reply.
 pub const CHUNK: usize = 0x5000;
@@ -60,13 +66,23 @@ pub const MODE_FILE: u32 = 0x8000;
 pub const DT_DIR: u8 = 4;
 pub const DT_REG: u8 = 8;
 
-/// Turn a card-relative path (`ROLAND/SP-404MKII/PROJECT_06`) into a remote path.
+/// Turn a path into one the device understands. Plain paths
+/// (`ROLAND/SP-404MKII/PROJECT_06`) address the device's own storage; a [`CARD`] prefix
+/// addresses the SD card.
 pub fn remote_path(path: &str) -> String {
     if path.starts_with(ROOT) {
         return path.to_string();
     }
+    if let Some(rel) = path.strip_prefix(CARD) {
+        return format!("/{}", rel.trim_start_matches(['/', '\\']));
+    }
     let rel = path.trim_start_matches(['/', '\\']);
     format!("{ROOT}/{rel}")
+}
+
+/// Whether a path addresses the SD card.
+pub fn on_card(path: &str) -> bool {
+    path.starts_with(CARD)
 }
 
 fn request(op: Op, first: [u8; 5], second: [u8; 5], tail: &[u8]) -> Vec<u8> {
@@ -356,6 +372,22 @@ impl DirEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routes_paths_to_the_right_volume() {
+        assert_eq!(
+            remote_path("ROLAND/SP-404MKII"),
+            "/SP404REMOTE///ROLAND/SP-404MKII"
+        );
+        // A leading slash still means the device's own storage.
+        assert_eq!(remote_path("/ROLAND"), "/SP404REMOTE///ROLAND");
+        assert_eq!(remote_path("SD:IMPORT/pack"), "/IMPORT/pack");
+        assert_eq!(remote_path("SD:/IMPORT"), "/IMPORT");
+        assert_eq!(remote_path("SD:"), "/");
+        // Already-resolved paths pass through.
+        assert_eq!(remote_path(ROOT), ROOT);
+        assert!(on_card("SD:IMPORT") && !on_card("ROLAND"));
+    }
 
     #[test]
     fn host_requests_from_capture() {

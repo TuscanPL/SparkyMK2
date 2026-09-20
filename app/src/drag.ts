@@ -95,7 +95,7 @@ export async function listenForFileDrops() {
     // The Files tab takes a drop anywhere in the window; Samples needs a pad under it.
     if (store.connected && store.tab === "files") {
       if (p.type === "drop" && p.paths.length && !store.pending) {
-        uploadToCard(p.paths, store.card?.path ?? "");
+        uploadToCard(p.paths, store.card?.volume ?? "card", store.card?.path ?? "");
       }
       drag.files = p.type === "enter" || p.type === "over";
       return;

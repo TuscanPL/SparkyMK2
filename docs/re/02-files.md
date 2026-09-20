@@ -18,6 +18,20 @@ ROLAND/SP-404MKII/
 
 The app's export names the folder `PROJECT_<project name>` (e.g. `PROJECT_PROJECT_06`).
 
+All of the above lives in the device's **own storage**, reached through the
+`/SP404REMOTE//` prefix. The **SD card** is a second filesystem at `/` (see
+[01-transport.md](01-transport.md)):
+
+```
+IMPORT/                        audio staged for the device's own IMPORT browser
+EXPORT/SAMPLE/                 where the device writes exported samples
+BKUP/                          backups
+SP404MKII_APP0.bin, APP1.bin   firmware images
+```
+
+A `.wav` written into `IMPORT/` over USB shows up in the device's IMPORT list without
+taking the card out; verified on firmware 5.52 on 2026-09-20.
+
 ## `*.SMP` sample
 
 | Offset | Size | Field |

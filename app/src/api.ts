@@ -113,10 +113,13 @@ export interface BpmResult {
   bpm: number | null;
 }
 
-/** An entry in a directory on the SD card. */
+/** The device's own storage, or the SD card in its slot. */
+export type Volume = "internal" | "card";
+
+/** An entry in a directory on one of the device's volumes. */
 export interface CardEntry {
   name: string;
-  /** Card-relative path. */
+  /** Path within the volume. */
   path: string;
   isDir: boolean;
   /** Bytes; 0 for directories. */
@@ -124,9 +127,11 @@ export interface CardEntry {
 }
 
 export interface CardListing {
+  volume: Volume;
   path: string;
   entries: CardEntry[];
-  freeKb: number;
+  /** Only the device's own storage reports free space. */
+  freeKb: number | null;
 }
 
 /** Progress of the transfer in flight, from the `transfer` event. */
@@ -167,7 +172,7 @@ export const api = {
   patterns: () => invoke<boolean[]>("patterns"),
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
   screens: () => invoke<ScreenImages>("screens"),
-  listCard: (path: string) => invoke<CardListing>("list_card", { path }),
+  listVolume: (volume: Volume, path: string) => invoke<CardListing>("list_volume", { volume, path }),
 
   setPadParam: (pad: number, name: string, value: number) =>
     invoke<PadState>("set_pad_param", { pad, name, value }),
@@ -185,12 +190,18 @@ export const api = {
   renameProject: (project: number, name: string) => invoke<string[]>("rename_project", { project, name }),
   setScreen: (slot: string, rows: number[]) => invoke<ScreenImage>("set_screen", { slot, rows }),
   restoreScreen: (slot: string) => invoke<ScreenImage>("restore_screen", { slot }),
-  downloadFile: (remote: string, local: string) => invoke<number>("download_file", { remote, local }),
-  downloadFolder: (remote: string, local: string) => invoke<number>("download_folder", { remote, local }),
-  uploadFile: (local: string, remote: string) => invoke<number>("upload_file", { local, remote }),
-  deleteCardPath: (path: string, isDir: boolean) => invoke<void>("delete_card_path", { path, isDir }),
-  renameCardPath: (path: string, name: string) => invoke<void>("rename_card_path", { path, name }),
-  createCardDir: (parent: string, name: string) => invoke<void>("create_card_dir", { parent, name }),
+  downloadFile: (volume: Volume, remote: string, local: string) =>
+    invoke<number>("download_file", { volume, remote, local }),
+  downloadFolder: (volume: Volume, remote: string, local: string) =>
+    invoke<number>("download_folder", { volume, remote, local }),
+  uploadFile: (local: string, volume: Volume, remote: string) =>
+    invoke<number>("upload_file", { local, volume, remote }),
+  deletePath: (volume: Volume, path: string, isDir: boolean) =>
+    invoke<void>("delete_path", { volume, path, isDir }),
+  renamePath: (volume: Volume, path: string, name: string) =>
+    invoke<void>("rename_path", { volume, path, name }),
+  createDir: (volume: Volume, parent: string, name: string) =>
+    invoke<void>("create_dir", { volume, parent, name }),
 };
 
 /** Error text from a failed command. */

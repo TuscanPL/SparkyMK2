@@ -7,12 +7,23 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Added
 
-- Files tab: browse the SD card over USB, copy files on and off it, and make, rename or
-  delete folders and files — no card reader needed. Transfers show progress, and files
-  can be dragged in from the file manager.
-- `sp404 put`, `rm`, `mv`, `mkdir` and `rmdir` do the same from the command line.
-- The file API's `mkdir`, `rmdir` and `rename` operations are decoded and documented in
-  `docs/re/01-transport.md`; they were guesses before.
+- Files tab: browse both of the device's filesystems over USB and move files either way —
+  its own storage (projects, samples, the factory library) and the SD card (`IMPORT`,
+  `EXPORT`, `BKUP`). Copy folders on or off, rename, delete, make folders. Transfers show
+  progress, and files can be dragged in from the file manager.
+- Audio copied into the card's `IMPORT` folder appears in the SP-404MKII's own IMPORT
+  browser, so sample packs can be loaded without taking the card out.
+- `sp404 put`, `rm`, `mv`, `mkdir` and `rmdir` do the same from the command line. Paths
+  prefixed `SD:` address the card; plain paths address the device's own storage.
+- The file API turns out to serve two filesystems, not one: `/SP404REMOTE//` is the
+  device's own storage and `/` is the SD card. Its `mkdir`, `rmdir` and `rename`
+  operations, previously guesses, are decoded. All of it is in
+  `docs/re/01-transport.md`.
+
+### Fixed
+
+- Listing a directory on the SD card no longer fails at the end: the card closes its own
+  directory handle once the listing runs out and then refuses `closedir`.
 
 ## [0.3.0] - 2026-09-20
 

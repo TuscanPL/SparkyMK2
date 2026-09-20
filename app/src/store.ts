@@ -4,6 +4,7 @@ import {
   api,
   errorText,
   type CardListing,
+  type Volume,
   type Pad,
   type PadDetail,
   type PadOperation,
@@ -224,10 +225,10 @@ export async function loadPatterns() {
   }
 }
 
-export async function loadCard(path: string) {
+export async function loadCard(volume: Volume, path: string) {
   store.cardLoading = true;
   try {
-    store.card = await api.listCard(path);
+    store.card = await api.listVolume(volume, path);
   } catch (e) {
     handleError(e);
   } finally {
@@ -235,9 +236,9 @@ export async function loadCard(path: string) {
   }
 }
 
-/** Re-read the directory now showing, after something on the card changed. */
+/** Re-read the directory now showing, after something on the device changed. */
 export async function reloadCard() {
-  if (store.card) await loadCard(store.card.path);
+  if (store.card) await loadCard(store.card.volume, store.card.path);
 }
 
 /** Run a card operation, showing the saving indicator and clearing progress after. */
@@ -258,35 +259,43 @@ function baseName(path: string): string {
   return path.split(/[/\\]/).pop() ?? path;
 }
 
-/** Copy local files onto the card in `dir`; stops at the first failure. */
-export async function uploadToCard(locals: string[], dir: string) {
+/** Copy local files onto a volume in `dir`; stops at the first failure. */
+export async function uploadToCard(locals: string[], volume: Volume, dir: string) {
+  const where = volume === "card" ? "the card" : "the device";
   for (const local of locals) {
     const name = baseName(local);
     const remote = dir ? `${dir}/${name}` : name;
-    if ((await onCard(() => api.uploadFile(local, remote))) === null) break;
+    if ((await onCard(() => api.uploadFile(local, volume, remote))) === null) break;
   }
   await reloadCard();
-  notify(locals.length === 1 ? `${baseName(locals[0])} copied to the card` : `${locals.length} files copied to the card`, "info");
+  notify(
+    locals.length === 1
+      ? `${baseName(locals[0])} copied to ${where}`
+      : `${locals.length} files copied to ${where}`,
+    "info",
+  );
 }
 
-export async function downloadFromCard(path: string, isDir: boolean, into: string) {
-  const bytes = await onCard(() => (isDir ? api.downloadFolder(path, into) : api.downloadFile(path, into)));
+export async function downloadFromCard(volume: Volume, path: string, isDir: boolean, into: string) {
+  const bytes = await onCard(() =>
+    isDir ? api.downloadFolder(volume, path, into) : api.downloadFile(volume, path, into),
+  );
   if (bytes !== null) notify(`${baseName(path)} saved`, "info");
 }
 
-export async function deleteFromCard(path: string, isDir: boolean) {
-  if ((await onCard(() => api.deleteCardPath(path, isDir))) === null) return;
+export async function deleteFromCard(volume: Volume, path: string, isDir: boolean) {
+  if ((await onCard(() => api.deletePath(volume, path, isDir))) === null) return;
   await reloadCard();
   notify(`${baseName(path)} deleted`, "info");
 }
 
-export async function renameOnCard(path: string, name: string) {
-  if ((await onCard(() => api.renameCardPath(path, name))) === null) return;
+export async function renameOnCard(volume: Volume, path: string, name: string) {
+  if ((await onCard(() => api.renamePath(volume, path, name))) === null) return;
   await reloadCard();
 }
 
-export async function createCardFolder(parent: string, name: string) {
-  if ((await onCard(() => api.createCardDir(parent, name))) === null) return;
+export async function createCardFolder(volume: Volume, parent: string, name: string) {
+  if ((await onCard(() => api.createDir(volume, parent, name))) === null) return;
   await reloadCard();
 }
 

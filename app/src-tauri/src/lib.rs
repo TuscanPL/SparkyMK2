@@ -46,13 +46,13 @@ pub fn run() {
             screens::screens,
             screens::set_screen,
             screens::restore_screen,
-            files::list_card,
+            files::list_volume,
             files::download_file,
             files::download_folder,
             files::upload_file,
-            files::delete_card_path,
-            files::rename_card_path,
-            files::create_card_dir,
+            files::delete_path,
+            files::rename_path,
+            files::create_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SparkyMK2");

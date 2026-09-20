@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon.vue";
-import { errorText, type CardEntry, type Transfer } from "../api";
+import { errorText, type CardEntry, type Transfer, type Volume } from "../api";
 import { bytes as formatBytes, storage } from "../format";
 import {
   ask,
@@ -22,14 +22,22 @@ const renaming = ref<string | null>(null);
 const renameText = ref("");
 let unlisten: UnlistenFn | undefined;
 
+/** The card first: its IMPORT folder is what the device's own IMPORT browser reads. */
+const volumes: { id: Volume; label: string; hint: string }[] = [
+  { id: "card", label: "SD card", hint: "IMPORT, EXPORT and BKUP. Sounds dropped in IMPORT show up in the device's own IMPORT browser." },
+  { id: "internal", label: "Device storage", hint: "The device's own memory: projects, samples and the factory library. Changing these can break a project." },
+];
+
 onMounted(async () => {
   unlisten = await listen<Transfer>("transfer", (e) => (store.transfer = e.payload));
-  if (!store.card) await loadCard("");
+  if (!store.card) await loadCard("card", "");
 });
 
 onUnmounted(() => unlisten?.());
 
+const volume = computed<Volume>(() => store.card?.volume ?? "card");
 const path = computed(() => store.card?.path ?? "");
+const hint = computed(() => volumes.find((v) => v.id === volume.value)?.hint ?? "");
 
 /** The path split into the steps of a breadcrumb, root first. */
 const crumbs = computed(() => {
@@ -43,14 +51,14 @@ const crumbs = computed(() => {
 
 /** Files the device owns; deleting or renaming them can break a project. */
 function isProjectFile(entry: CardEntry): boolean {
-  const full = entry.path;
-  return full.startsWith("ROLAND/") || full.startsWith("FCTRY/") || full.endsWith(".bin");
+  if (volume.value === "internal") return true;
+  return entry.name.endsWith(".bin");
 }
 
-async function go(to: string) {
+async function go(to: string, to_volume: Volume = volume.value) {
   selected.value = null;
   renaming.value = null;
-  await loadCard(to);
+  await loadCard(to_volume, to);
 }
 
 function up() {
@@ -66,7 +74,7 @@ async function onUpload() {
   try {
     const picked = await open({ multiple: true, title: "Copy to the card" });
     const locals = Array.isArray(picked) ? picked : picked ? [picked] : [];
-    if (locals.length) await uploadToCard(locals, path.value);
+    if (locals.length) await uploadToCard(locals, volume.value, path.value);
   } catch (e) {
     notify(errorText(e));
   }
@@ -79,7 +87,7 @@ async function onDownload() {
     const into = entry.isDir
       ? await open({ directory: true, title: `Save ${entry.name} into` })
       : await save({ defaultPath: entry.name, title: `Save ${entry.name}` });
-    if (typeof into === "string") await downloadFromCard(entry.path, entry.isDir, into);
+    if (typeof into === "string") await downloadFromCard(volume.value, entry.path, entry.isDir, into);
   } catch (e) {
     notify(errorText(e));
   }
@@ -87,7 +95,7 @@ async function onDownload() {
 
 async function onNewFolder() {
   const name = `NEW_FOLDER`;
-  await createCardFolder(path.value, name);
+  await createCardFolder(volume.value, path.value, name);
   // Drop straight into renaming it, so the placeholder name never sticks.
   renaming.value = path.value ? `${path.value}/${name}` : name;
   renameText.value = name;
@@ -102,7 +110,7 @@ async function commitRename(entry: CardEntry) {
   const name = renameText.value.trim();
   renaming.value = null;
   if (!name || name === entry.name) return;
-  await renameOnCard(entry.path, name);
+  await renameOnCard(volume.value, entry.path, name);
   selected.value = null;
 }
 
@@ -124,7 +132,7 @@ async function onDelete() {
     ],
   );
   if (answer !== "ok") return;
-  await deleteFromCard(entry.path, entry.isDir);
+  await deleteFromCard(volume.value, entry.path, entry.isDir);
   selected.value = null;
 }
 
@@ -137,11 +145,24 @@ const percent = computed(() => {
 <template>
   <div class="files">
     <div class="bar">
+      <nav class="volumes">
+        <button
+          v-for="v in volumes"
+          :key="v.id"
+          :class="{ active: volume === v.id }"
+          :disabled="store.pending > 0"
+          @click="go('', v.id)"
+        >
+          {{ v.label }}
+        </button>
+      </nav>
       <button class="ghost icon" title="Up one folder" :disabled="!path" @click="up">
         <Icon name="up" />
       </button>
       <nav class="crumbs">
-        <button class="crumb" :class="{ here: !path }" @click="go('')">Card</button>
+        <button class="crumb" :class="{ here: !path }" @click="go('')">
+          {{ volume === "card" ? "SD card" : "Device" }}
+        </button>
         <template v-for="c in crumbs" :key="c.path">
           <span class="sep">/</span>
           <button class="crumb" :class="{ here: c.path === path }" @click="go(c.path)">{{ c.name }}</button>
@@ -149,14 +170,16 @@ const percent = computed(() => {
       </nav>
       <span v-if="store.cardLoading" class="spinner" />
       <div class="spacer" />
-      <span v-if="store.card" class="muted free">{{ storage(store.card.freeKb) }} free</span>
+      <span v-if="store.card?.freeKb != null" class="muted free">{{ storage(store.card.freeKb) }} free</span>
       <button class="ghost icon" title="Reload this folder" @click="go(path)">
         <Icon name="refresh" />
       </button>
     </div>
 
     <div class="tools">
-      <button class="primary" :disabled="store.pending > 0" @click="onUpload">Copy to card…</button>
+      <button class="primary" :disabled="store.pending > 0" @click="onUpload">
+        Copy to {{ volume === "card" ? "card" : "device" }}…
+      </button>
       <button :disabled="store.pending > 0" @click="onNewFolder">New folder</button>
       <div class="spacer" />
       <button :disabled="!selected || store.pending > 0" @click="onDownload">
@@ -198,9 +221,10 @@ const percent = computed(() => {
       </p>
     </div>
 
+    <p class="muted hint">{{ hint }}</p>
     <p class="muted hint">
       Double-click a folder to open it. Files can also be dragged in from the file manager.
-      Audio dropped here is copied as-is — use the Samples tab to put a sound on a pad.
+      Audio is copied as-is — use the Samples tab to put a sound straight on a pad.
     </p>
   </div>
 </template>
@@ -225,6 +249,27 @@ const percent = computed(() => {
 
 .spacer {
   flex: 1;
+}
+
+.volumes {
+  display: flex;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.volumes button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.volumes button.active {
+  background: var(--panel-2);
+  color: var(--accent);
 }
 
 .crumbs {

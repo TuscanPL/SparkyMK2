@@ -69,6 +69,26 @@ A POSIX-like file API on the SD card. The payload is SysEx-shaped: `F0 41 7A <cm
 | `18` | free space in KB (seen ~14 GB on `/SP404REMOTE//`) | 0 | path length | path | capture |
 | `19` | path query returning a number _(?)_ | 0 | path length | path | call site |
 
+### Volumes
+
+The file API serves **two** filesystems, and a path's prefix picks which:
+
+| Prefix | Filesystem | Holds |
+|---|---|---|
+| `/SP404REMOTE//` | the device's own storage | `FCTRY/FACTORY.SVD`, `ROLAND/SP-404MKII/PROJECT_01..16`, `QSPI.bin`, `_rec.bin`, `_norm.bin` |
+| `/` | the SD card in the slot | `IMPORT/`, `EXPORT/`, `BKUP/`, `SP404MKII_APP0/1.bin` firmware images |
+
+Projects and samples live in the device's own storage, **not** on the card; the card is
+where audio is staged for the device's own IMPORT browser and where it writes exports.
+Any other prefix (`/SD//`, `/SDCARD//`, `/MMC//`, …) is refused with −1 and `extra` 22
+(`EINVAL`), so the two above are the whole set. `free space` (`18`) answers only for the
+device's own storage; on the card it returns −1.
+
+The card's directory handles behave differently: once `readdir` has run out of entries the
+card closes the handle itself, and a following `closedir` is refused. Closing a handle
+that has *not* been enumerated to the end succeeds. The device's own storage keeps the
+handle open either way.
+
 `09`, `0B` and `17` were confirmed against firmware 5.52 on 2026-09-20 by sending them at
 a throwaway path and listing the result. Path ops answer `result` 0 on success and −1 on
 failure, with `extra` carrying an errno: `mkdir` over an existing name gives −1 and 17

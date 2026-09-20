@@ -10,7 +10,8 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 - Pad parameter read (including channel count from SMP headers)
 - Waveform peaks
 - Preview
-- Directory listing, file download and upload, rename, delete, mkdir and rmdir
+- Directory listing, file download and upload, rename, delete, mkdir and rmdir, on
+  both the device's own storage and the SD card
 - Project export
 - Sample → WAV
 - Set parameter, including loop top
@@ -104,9 +105,10 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 
 | Feature | Protocol |
 |---|---|
-| Browse any directory on the card | ✅ `opendir`/`readdir`/`stat` |
-| Copy files on and off the card | ✅ `open`/`read`/`write`, ~2 MB/s |
+| Browse the device's own storage and the SD card | ✅ `opendir`/`readdir`/`stat`, two path prefixes |
+| Copy files and folders either way | ✅ `open`/`read`/`write`, ~2 MB/s |
 | Rename, delete, mkdir, rmdir | ✅ ops `17`, `0A`, `09`, `0B` |
+| Stage audio for the device's own IMPORT browser | ✅ write into the card's `IMPORT/` |
 
 ## Screens tab (not in the official app)
 
