@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepare a release: set the version, date the changelog, commit and tag.
 # Usage: scripts/release.sh 1.2.3
-# Pushing is left to you: git push origin main v1.2.3
+# Pushing is left to you, and the tag goes in its own push (see the end of this script).
 set -euo pipefail
 
 version=${1:-}
@@ -37,4 +37,8 @@ git commit -q -am "Release v$version"
 git tag -a "v$version" -m "SparkyMK2 $version"
 
 echo "Tagged v$version. Publish it with:"
-echo "  git push origin main v$version"
+echo "  git push origin main"
+echo "  git push origin v$version"
+echo
+echo "Push the tag on its own: GitHub drops the tag event when a branch and a tag arrive"
+echo "in the same push, and then the release workflow never starts."

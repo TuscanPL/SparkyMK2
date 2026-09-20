@@ -22,8 +22,12 @@ This sets the version in `Cargo.toml` and `Cargo.lock`, turns `[Unreleased]` int
 ## 3. Build the downloads
 
 ```bash
-git push origin main v0.2.0
+git push origin main
+git push origin v0.2.0
 ```
+
+Push the tag by itself. When a branch and a tag go up in the same push, GitHub drops the
+tag event and the release workflow never starts.
 
 The tag starts `.github/workflows/release.yml`. It runs the core tests, builds the `.deb`,
 `.rpm` and AppImage on Ubuntu 22.04, and creates a **draft** release with the version's
