@@ -12,10 +12,9 @@ samples, pads, patterns and projects on the device over USB.
 **Early, but the core works.** The USB protocol is decoded and documented, and a Rust
 core with a command-line tool (`sp404`) talks to real hardware.
 
-- Verified against an SP-404MKII on firmware **5.52**, driven from Windows.
-- The Linux build uses the same code, but hasn't been tested against the device yet.
-- An early desktop app shows the device's samples, patterns and settings. It can't edit
-  yet. A plugin version comes later.
+- Verified against an SP-404MKII on firmware **5.52**, from Windows and Linux.
+- A desktop app edits samples, pads and project settings, and shows patterns. A plugin
+  version comes later.
 
 Feature-by-feature progress against the official app is tracked in
 [docs/parity.md](docs/parity.md).
@@ -54,6 +53,22 @@ Feature-by-feature progress against the official app is tracked in
 - Inspect project backups (`PADCONF.BIN`, pattern files, SMP samples) without the device.
 - Convert audio to the SMP format.
 - Analyse audio files for tempo and key.
+
+## Install
+
+Download the latest release from the
+[Releases page](https://github.com/TuscanPL/SparkyMK2/releases). The packages pull in
+what they need:
+
+| System | Download | Install |
+|---|---|---|
+| Debian, Ubuntu, Mint | `sparkymk2_X.Y.Z_amd64.deb` | `sudo apt install ./sparkymk2_*_amd64.deb` |
+| Fedora | `sparkymk2-X.Y.Z-1.x86_64.rpm` | `sudo dnf install ./sparkymk2-*.x86_64.rpm` |
+| Arch, CachyOS, Manjaro | from the AUR | `yay -S sparkymk2` or `paru -S sparkymk2` |
+| Other distributions | `sparkymk2_X.Y.Z_amd64.AppImage` | `chmod +x sparkymk2_*.AppImage`, then run it |
+
+The .deb, .rpm and AUR packages let the logged-in user open the SP-404MKII straight away.
+With the AppImage, set up serial port access once (see [Linux setup](#linux-setup)).
 
 ## Building
 
@@ -121,8 +136,14 @@ sudo dnf install systemd-devel pkgconf-pkg-config
 ```
 
 The SP-404MKII shows up as a USB serial device (`/dev/ttyACM*`, kernel driver
-`cdc_acm`). Your user needs access to serial devices. Log out and back in after running
-the command for your distribution:
+`cdc_acm`). The packages give the logged-in user access to it. With the AppImage or a
+source build, either install the same udev rule and replug the sampler:
+
+```bash
+sudo install -Dm644 packaging/linux/70-sp404mkii.rules /etc/udev/rules.d/70-sp404mkii.rules
+```
+
+or join the serial port group, then log out and back in:
 
 ```bash
 # Arch-based distributions
@@ -172,6 +193,8 @@ crates/sp404-device    USB serial connection (0582:02E7, 921600 baud)
 crates/sp404-dsp       tempo and key detection
 crates/sp404-cli       the `sp404` command-line tool
 app/                   desktop app: Vue frontend, Tauri backend in app/src-tauri
+packaging/             Arch and AUR packages, launcher entry, udev rule
+scripts/release.sh     prepares a release (see docs/releasing.md)
 docs/re/               protocol and file-format specification
 docs/parity.md         feature checklist against the official app
 tools/                 Windows capture and analysis scripts used for reverse engineering

@@ -113,7 +113,17 @@ pub async fn connect(state: State<'_, AppState>, port: Option<String>) -> CmdRes
     })
     .await
     .map_err(|e| e.to_string())?
-    .map_err(|e| format!("{e} (is another program using the device?)"))?;
+    .map_err(|e| {
+        let text = e.to_string();
+        if text.contains("Permission denied") {
+            format!(
+                "{text}. Your user may not have access to the SP-404MKII's serial port: install \
+                 the SparkyMK2 package, or join the uucp (Arch) or dialout group and log in again."
+            )
+        } else {
+            format!("{text} (is another program using the device?)")
+        }
+    })?;
     let name = device.port_name().to_string();
     *state.device.lock().unwrap() = Some(Arc::new(device));
     Ok(name)

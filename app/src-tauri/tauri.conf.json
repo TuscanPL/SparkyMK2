@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SparkyMK2",
-  "version": "0.1.0",
+  "productName": "sparkymk2",
   "identifier": "com.tuscanpl.sparkymk2",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -26,13 +25,48 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
+    "category": "Music",
+    "shortDescription": "Editor and librarian for the Roland SP-404MKII",
+    "longDescription": "Manage samples, pads, patterns and projects on a Roland SP-404MKII over USB. Not affiliated with Roland Corporation.",
+    "homepage": "https://github.com/TuscanPL/SparkyMK2",
+    "publisher": "TuscanPL",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
     "icon": [
       "icons/32x32.png",
+      "icons/64x64.png",
       "icons/128x128.png",
-      "icons/128x128@2x.png",
+      "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "section": "sound",
+        "depends": [
+          "libudev1"
+        ],
+        "desktopTemplate": "../../packaging/linux/sparkymk2.desktop",
+        "files": {
+          "/usr/lib/udev/rules.d/70-sp404mkii.rules": "../../packaging/linux/70-sp404mkii.rules"
+        },
+        "postInstallScript": "../../packaging/linux/udev-reload.sh"
+      },
+      "rpm": {
+        "depends": [
+          "systemd-libs"
+        ],
+        "desktopTemplate": "../../packaging/linux/sparkymk2.desktop",
+        "files": {
+          "/usr/lib/udev/rules.d/70-sp404mkii.rules": "../../packaging/linux/70-sp404mkii.rules"
+        },
+        "postInstallScript": "../../packaging/linux/udev-reload.sh"
+      }
+    }
   }
 }

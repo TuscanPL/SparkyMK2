@@ -37,7 +37,7 @@ onMounted(scanPorts);
 
       <ul class="hints muted">
         <li>Only one program can use the device at a time. Close the official app and the <span class="mono">sp404</span> tool first.</li>
-        <li>On Linux your user needs serial port access: the <span class="mono">uucp</span> group on Arch, <span class="mono">dialout</span> elsewhere.</li>
+        <li>The Debian, Fedora and Arch packages give you access to the device. With the AppImage or a source build, join the <span class="mono">uucp</span> group (Arch) or <span class="mono">dialout</span> (others) and log in again.</li>
       </ul>
     </div>
   </div>

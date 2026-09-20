@@ -1,0 +1,10 @@
+post_install() {
+  # Apply the SP-404MKII udev rule now, including to a device that is already plugged in.
+  udevadm control --reload-rules >/dev/null 2>&1
+  udevadm trigger --subsystem-match=tty --action=change >/dev/null 2>&1
+  return 0
+}
+
+post_upgrade() {
+  post_install
+}

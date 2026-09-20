@@ -1,34 +1,51 @@
 # Maintainer: TuscanPL <okarinpl@gmail.com>
 #
-# Builds the desktop app from this repository's checkout. update.sh next to this file
-# builds and installs it in one step.
+# AUR package, built from a tagged release. scripts/release.sh sets pkgver; after the tag
+# is on GitHub, run `updpkgsums` and `makepkg --printsrcinfo > .SRCINFO` before publishing
+# (see docs/releasing.md).
 
 pkgname=sparkymk2
-# The repository root, two levels above this file.
-_root="$startdir/../.."
-# Version from Cargo.toml plus the commit, computed here rather than in pkgver() so
-# builds don't rewrite this file.
-pkgver=$(cd "$_root" && printf '%s.r%s.g%s' \
-  "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" \
-  "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)")
+pkgver=0.1.0
 pkgrel=1
 pkgdesc='Editor and librarian for the Roland SP-404MKII'
 arch=('x86_64')
 url='https://github.com/TuscanPL/SparkyMK2'
 license=('GPL-3.0-or-later')
 depends=('webkit2gtk-4.1' 'gtk3' 'libsoup3' 'glib2' 'cairo' 'gdk-pixbuf2' 'dbus' 'systemd-libs' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
-makedepends=('cargo' 'nodejs' 'npm' 'pkgconf' 'git')
+makedepends=('cargo' 'nodejs' 'npm' 'pkgconf')
 options=('!lto' '!debug')
 install=sparkymk2.install
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_srcdir() {
+  printf '%s' "$srcdir/SparkyMK2-$pkgver"
+}
+
+prepare() {
+  cd "$(_srcdir)"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')"
+  cd app
+  npm ci
+}
 
 build() {
-  cd "$_root/app"
-  npm ci
-  npm run tauri build -- --no-bundle
+  cd "$(_srcdir)/app"
+  export RUSTUP_TOOLCHAIN=stable
+  # Keep build paths out of the binary (panic locations would name $srcdir).
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/"
+  npx --no-install tauri build --no-bundle -- --frozen
+}
+
+check() {
+  cd "$(_srcdir)"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen
 }
 
 package() {
-  cd "$_root"
+  cd "$(_srcdir)"
   install -Dm755 target/release/sparkymk2 "$pkgdir/usr/bin/sparkymk2"
   install -Dm644 packaging/linux/sparkymk2.desktop "$pkgdir/usr/share/applications/sparkymk2.desktop"
   install -Dm644 packaging/linux/70-sp404mkii.rules "$pkgdir/usr/lib/udev/rules.d/70-sp404mkii.rules"
