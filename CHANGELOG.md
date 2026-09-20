@@ -7,13 +7,7 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [0.4.1] - 2026-09-20
 
-### Fixed
-
-- Leaving a menu on the device now re-reads its state. Edits made on the SP-404MKII
-  itself happen behind that menu and are not announced, so the app could sit on a stale
-  view until something else made it reload.
-
-## [0.4.0] - 2026-09-20
+0.4.0 was tagged but never released, so everything below ships for the first time here.
 
 ### Added
 
@@ -38,6 +32,9 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Fixed
 
+- Leaving a menu on the device now re-reads its state. Edits made on the SP-404MKII
+  itself happen behind that menu and are not announced, so the app could sit on a stale
+  view until something else made it reload.
 - Listing a directory on the SD card no longer fails at the end: the card closes its own
   directory handle once the listing runs out and then refuses `closedir`.
 - Dragging a pad, a sound, a waveform marker or the pixels of a display image no longer
