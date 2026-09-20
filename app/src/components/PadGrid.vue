@@ -58,7 +58,6 @@ function click(index: number) {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-  user-select: none;
 }
 
 .grid.teal {

@@ -38,6 +38,19 @@ body,
   overflow: hidden;
 }
 
+/* This is an app, not a page: dragging a pad, a sound, a waveform marker or the pixels of
+   a display image must never start selecting text. Fields opt back in below. */
+#app {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 button,
 select {
   font: inherit;
