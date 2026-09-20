@@ -9,6 +9,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "samples", label: "Samples" },
   { id: "patterns", label: "Patterns" },
   { id: "screens", label: "Screens" },
+  { id: "files", label: "Files" },
   { id: "settings", label: "Settings" },
 ];
 

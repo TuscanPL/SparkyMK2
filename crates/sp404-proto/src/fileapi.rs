@@ -33,7 +33,9 @@ pub enum Op {
     Read = 0x04,
     Write = 0x06,
     Seek = 0x07,
+    Mkdir = 0x09,
     Unlink = 0x0A,
+    Rmdir = 0x0B,
     OpenDir = 0x0C,
     CloseDir = 0x0D,
     ReadDir = 0x0E,
@@ -143,6 +145,16 @@ pub fn stat(path: &str) -> Vec<u8> {
 
 pub fn unlink(path: &str) -> Vec<u8> {
     path_request(Op::Unlink, 0, path)
+}
+
+/// Create a directory. Fails with −1 (`extra` 17, `EEXIST`) when the name is taken.
+pub fn mkdir(path: &str) -> Vec<u8> {
+    path_request(Op::Mkdir, 0, path)
+}
+
+/// Remove an empty directory.
+pub fn rmdir(path: &str) -> Vec<u8> {
+    path_request(Op::Rmdir, 0, path)
 }
 
 pub fn opendir(path: &str) -> Vec<u8> {

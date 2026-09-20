@@ -34,7 +34,8 @@ Feature-by-feature progress against the official app is tracked in
   projects.
 - Back up a whole project to a folder; the result is byte-identical to the official app's
   export.
-- Browse and download files from the SD card.
+- Browse the SD card and move files both ways over USB: copy sounds and folders on or
+  off it, rename, delete, make folders. Measured at about 2 MB/s, so no card reader.
 
 **Samples and pads**
 - Import WAV, AIFF, FLAC or MP3 at any sample rate. Audio is converted to the device's

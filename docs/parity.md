@@ -10,7 +10,7 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 - Pad parameter read (including channel count from SMP headers)
 - Waveform peaks
 - Preview
-- Directory listing and file download
+- Directory listing, file download and upload, rename, delete, mkdir and rmdir
 - Project export
 - Sample → WAV
 - Set parameter, including loop top
@@ -99,6 +99,14 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 | Tempo Select (Project / Bank), Project Tempo, Bank A–J Tempo and Volume | ✅ |
 | Bank protect | ✅ (the app blocks edits on protected banks itself) |
 | Project rename | ✅ |
+
+## Files tab (not in the official app)
+
+| Feature | Protocol |
+|---|---|
+| Browse any directory on the card | ✅ `opendir`/`readdir`/`stat` |
+| Copy files on and off the card | ✅ `open`/`read`/`write`, ~2 MB/s |
+| Rename, delete, mkdir, rmdir | ✅ ops `17`, `0A`, `09`, `0B` |
 
 ## Screens tab (not in the official app)
 

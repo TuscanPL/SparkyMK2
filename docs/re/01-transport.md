@@ -57,17 +57,22 @@ A POSIX-like file API on the SD card. The payload is SysEx-shaped: `F0 41 7A <cm
 | `04` | read | handle | byte count | `00` | capture |
 | `06` | write | handle | chunk length (≤ 20480); flag bit `0x40` on the last chunk of a batch | data | capture |
 | `07` | seek | handle | absolute offset; the reply result is the new offset | whence _(?)_ | capture |
-| `09` | path op: mkdir or rmdir _(?)_ | 0 | path length | path | call site |
+| `09` | **mkdir** | 0 | path length | path | confirmed |
 | `0A` | unlink | 0 | path length | path | capture |
-| `0B` | path op: mkdir or rmdir _(?)_ | 0 | path length | path | call site |
+| `0B` | **rmdir** (the directory must be empty) | 0 | path length | path | confirmed |
 | `0C` | opendir | 0 | path length | path | capture |
 | `0D` | closedir | dir handle | 0 | `00` | capture |
 | `0E` | readdir | dir handle | 0 | `00` | capture |
 | `12` | stat (path) | 0 | path length | path | capture |
 | `13` | fstat (handle) | handle | 0 | `00` | capture |
-| `17` | rename _(?)_ | 0 | 400 | two paths, NUL-padded to 200 bytes each | capture + call site |
+| `17` | **rename** (also moves between directories) | 0 | 400 | two paths, NUL-padded to 200 bytes each | confirmed |
 | `18` | free space in KB (seen ~14 GB on `/SP404REMOTE//`) | 0 | path length | path | capture |
 | `19` | path query returning a number _(?)_ | 0 | path length | path | call site |
+
+`09`, `0B` and `17` were confirmed against firmware 5.52 on 2026-09-20 by sending them at
+a throwaway path and listing the result. Path ops answer `result` 0 on success and −1 on
+failure, with `extra` carrying an errno: `mkdir` over an existing name gives −1 and 17
+(`EEXIST`), and `rmdir` on a directory that still holds files is refused the same way.
 
 ### Write batching
 

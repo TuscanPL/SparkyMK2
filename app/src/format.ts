@@ -26,6 +26,19 @@ export function duration(frames: number): string {
   return `${m}:${(seconds - m * 60).toFixed(3).padStart(6, "0")}`;
 }
 
+/** A file size, from bytes up. */
+export function bytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["kB", "MB", "GB"];
+  let value = n / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+}
+
 export function storage(kb: number): string {
   const gb = kb / 1024 / 1024;
   return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(kb / 1024).toFixed(0)} MB`;

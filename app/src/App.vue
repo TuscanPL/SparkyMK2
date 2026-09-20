@@ -5,6 +5,7 @@ import ConnectScreen from "./components/ConnectScreen.vue";
 import Toasts from "./components/Toasts.vue";
 import TopBar from "./components/TopBar.vue";
 import PatternsTab from "./tabs/PatternsTab.vue";
+import FilesTab from "./tabs/FilesTab.vue";
 import SamplesTab from "./tabs/SamplesTab.vue";
 import ScreensTab from "./tabs/ScreensTab.vue";
 import SettingsTab from "./tabs/SettingsTab.vue";
@@ -38,6 +39,7 @@ watch(
       <SamplesTab v-else-if="store.tab === 'samples'" />
       <PatternsTab v-else-if="store.tab === 'patterns'" />
       <ScreensTab v-else-if="store.tab === 'screens'" />
+      <FilesTab v-else-if="store.tab === 'files'" />
       <SettingsTab v-else />
     </main>
     <div v-if="drag.from >= 0" class="ghost" :style="{ left: `${drag.x + 12}px`, top: `${drag.y + 12}px` }">

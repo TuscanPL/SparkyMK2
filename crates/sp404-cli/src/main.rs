@@ -218,6 +218,16 @@ enum Command {
     RenameSample { pad: PadIndex, name: String },
     /// Rename a project (1-based project number).
     RenameProject { project: u8, name: String },
+    /// Upload a file to the card, replacing it if it exists.
+    Put { local: PathBuf, remote: String },
+    /// Delete a file from the card.
+    Rm { remote: String },
+    /// Move or rename a file or directory on the card.
+    Mv { from: String, to: String },
+    /// Create a directory on the card.
+    Mkdir { remote: String },
+    /// Remove an empty directory from the card.
+    Rmdir { remote: String },
     /// Replace a display image with a 128x64 one-bit BMP.
     ImportScreen {
         /// Slot name, e.g. startup_1 or screen_saver_3.
@@ -383,6 +393,32 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::MultipadPattern { pattern, dir } => multipad(&dev, pattern, &dir),
+        Command::Put { local, remote } => {
+            let data = fs::read(&local).with_context(|| format!("reading {}", local.display()))?;
+            dev.write_file(&remote, &data)?;
+            println!("{} bytes -> {remote}", data.len());
+            Ok(())
+        }
+        Command::Rm { remote } => {
+            dev.unlink(&remote)?;
+            println!("deleted {remote}");
+            Ok(())
+        }
+        Command::Mv { from, to } => {
+            dev.rename(&from, &to)?;
+            println!("{from} -> {to}");
+            Ok(())
+        }
+        Command::Mkdir { remote } => {
+            dev.mkdir(&remote)?;
+            println!("created {remote}");
+            Ok(())
+        }
+        Command::Rmdir { remote } => {
+            dev.rmdir(&remote)?;
+            println!("removed {remote}");
+            Ok(())
+        }
         Command::Screens { project } => list_screens(&dev, project),
         Command::ExportScreen { slot, out, project } => export_screen(&dev, &slot, &out, project),
         Command::ImportScreen {

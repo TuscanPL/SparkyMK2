@@ -113,6 +113,29 @@ export interface BpmResult {
   bpm: number | null;
 }
 
+/** An entry in a directory on the SD card. */
+export interface CardEntry {
+  name: string;
+  /** Card-relative path. */
+  path: string;
+  isDir: boolean;
+  /** Bytes; 0 for directories. */
+  size: number;
+}
+
+export interface CardListing {
+  path: string;
+  entries: CardEntry[];
+  freeKb: number;
+}
+
+/** Progress of the transfer in flight, from the `transfer` event. */
+export interface Transfer {
+  name: string;
+  done: number;
+  total: number;
+}
+
 /** One display image of a project, as it is on the card. */
 export interface ScreenImage {
   slot: string;
@@ -144,6 +167,7 @@ export const api = {
   patterns: () => invoke<boolean[]>("patterns"),
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
   screens: () => invoke<ScreenImages>("screens"),
+  listCard: (path: string) => invoke<CardListing>("list_card", { path }),
 
   setPadParam: (pad: number, name: string, value: number) =>
     invoke<PadState>("set_pad_param", { pad, name, value }),
@@ -161,6 +185,12 @@ export const api = {
   renameProject: (project: number, name: string) => invoke<string[]>("rename_project", { project, name }),
   setScreen: (slot: string, rows: number[]) => invoke<ScreenImage>("set_screen", { slot, rows }),
   restoreScreen: (slot: string) => invoke<ScreenImage>("restore_screen", { slot }),
+  downloadFile: (remote: string, local: string) => invoke<number>("download_file", { remote, local }),
+  downloadFolder: (remote: string, local: string) => invoke<number>("download_folder", { remote, local }),
+  uploadFile: (local: string, remote: string) => invoke<number>("upload_file", { local, remote }),
+  deleteCardPath: (path: string, isDir: boolean) => invoke<void>("delete_card_path", { path, isDir }),
+  renameCardPath: (path: string, name: string) => invoke<void>("rename_card_path", { path, name }),
+  createCardDir: (parent: string, name: string) => invoke<void>("create_card_dir", { parent, name }),
 };
 
 /** Error text from a failed command. */

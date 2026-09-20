@@ -3,6 +3,7 @@ import { reactive } from "vue";
 import {
   api,
   errorText,
+  type CardListing,
   type Pad,
   type PadDetail,
   type PadOperation,
@@ -14,7 +15,7 @@ import {
 } from "./api";
 import { bankOf, bpm, padLabel } from "./format";
 
-export type Tab = "samples" | "patterns" | "screens" | "settings";
+export type Tab = "samples" | "patterns" | "screens" | "files" | "settings";
 
 interface Toast {
   id: number;
@@ -51,6 +52,10 @@ export const store = reactive({
   pads: [] as Pad[],
   patterns: [] as boolean[],
   screens: [] as ScreenImage[],
+  card: null as CardListing | null,
+  cardLoading: false,
+  /** Bytes moved and expected while a transfer runs. */
+  transfer: null as { name: string; done: number; total: number } | null,
   padsLoading: false,
   patternsLoading: false,
   screensLoading: false,
@@ -176,6 +181,7 @@ function resetDevice() {
   store.pads = [];
   store.patterns = [];
   store.screens = [];
+  store.card = null;
   store.selectedPad = null;
   store.selectedPattern = null;
   store.detail = null;
@@ -216,6 +222,72 @@ export async function loadPatterns() {
   } finally {
     store.patternsLoading = false;
   }
+}
+
+export async function loadCard(path: string) {
+  store.cardLoading = true;
+  try {
+    store.card = await api.listCard(path);
+  } catch (e) {
+    handleError(e);
+  } finally {
+    store.cardLoading = false;
+  }
+}
+
+/** Re-read the directory now showing, after something on the card changed. */
+export async function reloadCard() {
+  if (store.card) await loadCard(store.card.path);
+}
+
+/** Run a card operation, showing the saving indicator and clearing progress after. */
+async function onCard<T>(run: () => Promise<T>): Promise<T | null> {
+  store.pending++;
+  try {
+    return await run();
+  } catch (e) {
+    handleError(e);
+    return null;
+  } finally {
+    store.pending--;
+    store.transfer = null;
+  }
+}
+
+function baseName(path: string): string {
+  return path.split(/[/\\]/).pop() ?? path;
+}
+
+/** Copy local files onto the card in `dir`; stops at the first failure. */
+export async function uploadToCard(locals: string[], dir: string) {
+  for (const local of locals) {
+    const name = baseName(local);
+    const remote = dir ? `${dir}/${name}` : name;
+    if ((await onCard(() => api.uploadFile(local, remote))) === null) break;
+  }
+  await reloadCard();
+  notify(locals.length === 1 ? `${baseName(locals[0])} copied to the card` : `${locals.length} files copied to the card`, "info");
+}
+
+export async function downloadFromCard(path: string, isDir: boolean, into: string) {
+  const bytes = await onCard(() => (isDir ? api.downloadFolder(path, into) : api.downloadFile(path, into)));
+  if (bytes !== null) notify(`${baseName(path)} saved`, "info");
+}
+
+export async function deleteFromCard(path: string, isDir: boolean) {
+  if ((await onCard(() => api.deleteCardPath(path, isDir))) === null) return;
+  await reloadCard();
+  notify(`${baseName(path)} deleted`, "info");
+}
+
+export async function renameOnCard(path: string, name: string) {
+  if ((await onCard(() => api.renameCardPath(path, name))) === null) return;
+  await reloadCard();
+}
+
+export async function createCardFolder(parent: string, name: string) {
+  if ((await onCard(() => api.createCardDir(parent, name))) === null) return;
+  await reloadCard();
 }
 
 export async function loadScreens() {

@@ -5,6 +5,15 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- Files tab: browse the SD card over USB, copy files on and off it, and make, rename or
+  delete folders and files — no card reader needed. Transfers show progress, and files
+  can be dragged in from the file manager.
+- `sp404 put`, `rm`, `mv`, `mkdir` and `rmdir` do the same from the command line.
+- The file API's `mkdir`, `rmdir` and `rename` operations are decoded and documented in
+  `docs/re/01-transport.md`; they were guesses before.
+
 ## [0.3.0] - 2026-09-20
 
 ### Added

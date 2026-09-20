@@ -1,7 +1,7 @@
 // Dragging pads onto other pads, and dropping audio files from the file manager.
 import { reactive } from "vue";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { editBlock, importFiles, moveSample, store } from "./store";
+import { editBlock, importFiles, moveSample, store, uploadToCard } from "./store";
 
 const THRESHOLD = 5;
 const BANK_HOVER_MS = 350;
@@ -92,6 +92,14 @@ export function clickAfterDrag(): boolean {
 export async function listenForFileDrops() {
   await getCurrentWebview().onDragDropEvent((event) => {
     const p = event.payload;
+    // The Files tab takes a drop anywhere in the window; Samples needs a pad under it.
+    if (store.connected && store.tab === "files") {
+      if (p.type === "drop" && p.paths.length && !store.pending) {
+        uploadToCard(p.paths, store.card?.path ?? "");
+      }
+      drag.files = p.type === "enter" || p.type === "over";
+      return;
+    }
     const usable = store.connected && store.tab === "samples";
     if (p.type === "leave" || !usable) {
       drag.files = false;

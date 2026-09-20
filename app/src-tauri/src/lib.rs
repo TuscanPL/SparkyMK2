@@ -2,6 +2,7 @@
 
 mod commands;
 mod edit;
+mod files;
 mod screens;
 
 use std::sync::{Arc, Mutex};
@@ -18,6 +19,7 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_ports,
@@ -44,6 +46,13 @@ pub fn run() {
             screens::screens,
             screens::set_screen,
             screens::restore_screen,
+            files::list_card,
+            files::download_file,
+            files::download_folder,
+            files::upload_file,
+            files::delete_card_path,
+            files::rename_card_path,
+            files::create_card_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SparkyMK2");
