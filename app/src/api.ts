@@ -113,6 +113,21 @@ export interface BpmResult {
   bpm: number | null;
 }
 
+/** One display image of a project, as it is on the card. */
+export interface ScreenImage {
+  slot: string;
+  /** Packed rows, 16 bytes per row, top row first; null when the slot has no usable file. */
+  rows: number[] | null;
+  problem: string | null;
+  hasOriginal: boolean;
+}
+
+export interface ScreenImages {
+  /** 1-based, the project the images were read from. */
+  project: number;
+  slots: ScreenImage[];
+}
+
 export type PadOperation = "truncate" | "normalize" | "delete";
 
 export const api = {
@@ -128,6 +143,7 @@ export const api = {
   preview: (pad: number, ms: number) => invoke<void>("preview_pad", { pad, ms }),
   patterns: () => invoke<boolean[]>("patterns"),
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
+  screens: () => invoke<ScreenImages>("screens"),
 
   setPadParam: (pad: number, name: string, value: number) =>
     invoke<PadState>("set_pad_param", { pad, name, value }),
@@ -143,6 +159,8 @@ export const api = {
     invoke<BpmResult>("analyze_bpm", { pad, mode, bpmRange }),
   setGlobalParam: (name: string, value: number) => invoke<Status>("set_global_param", { name, value }),
   renameProject: (project: number, name: string) => invoke<string[]>("rename_project", { project, name }),
+  setScreen: (slot: string, rows: number[]) => invoke<ScreenImage>("set_screen", { slot, rows }),
+  restoreScreen: (slot: string) => invoke<ScreenImage>("restore_screen", { slot }),
 };
 
 /** Error text from a failed command. */

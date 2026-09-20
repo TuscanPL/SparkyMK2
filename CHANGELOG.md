@@ -5,6 +5,15 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- Screens tab: edit a project's startup animation and screen saver, and write them to the
+  device. Load a PNG, JPEG, GIF, WebP or BMP and convert it with a choice of dithering,
+  threshold, brightness and contrast, or draw the 128 × 64 pixels by hand. The image each
+  slot held before the app first changed it is kept, so it can be put back.
+- `sp404 screens`, `sp404 export-screen` and `sp404 import-screen` do the same from the
+  command line.
+
 ## [0.2.0] - 2026-09-20
 
 ### Added

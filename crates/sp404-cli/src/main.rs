@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use sp404_device::screens;
 use sp404_device::{Device, find_ports};
 use sp404_dsp::{Tempo, TempoRange};
-use sp404_formats::{Padconf, Pattern, Sample, audio, smf, smp, wav};
+use sp404_formats::{Padconf, Pattern, Sample, audio, picture, smf, smp, wav};
 use sp404_proto::control::{InitScope, MoveMode, PadOp};
 use sp404_proto::pad::PadBlock;
 use sp404_proto::params::{self, Scope, Target};
@@ -107,6 +108,21 @@ enum Command {
     },
     /// List pattern slots that hold a pattern.
     Patterns,
+    /// List a project's display images (startup and screen saver).
+    Screens {
+        /// Project number (default: current).
+        #[arg(long)]
+        project: Option<u8>,
+    },
+    /// Save a display image as a BMP file.
+    ExportScreen {
+        /// Slot name, e.g. startup_1 or screen_saver_3.
+        slot: String,
+        out: PathBuf,
+        /// Project number (default: current).
+        #[arg(long)]
+        project: Option<u8>,
+    },
     /// Bounce a pattern to a WAV file (the device renders it in real time).
     BouncePattern { pattern: PadIndex, out: PathBuf },
     /// Render each pad a pattern uses to its own WAV file (MULTIPAD export).
@@ -202,6 +218,15 @@ enum Command {
     RenameSample { pad: PadIndex, name: String },
     /// Rename a project (1-based project number).
     RenameProject { project: u8, name: String },
+    /// Replace a display image with a 128x64 one-bit BMP.
+    ImportScreen {
+        /// Slot name, e.g. startup_1 or screen_saver_3.
+        slot: String,
+        file: PathBuf,
+        /// Project number; must be the current project (default: current).
+        #[arg(long)]
+        project: Option<u8>,
+    },
     /// Move a pad's sample to another pad (replacing it), or swap them with --exchange.
     MoveSample {
         from: PadIndex,
@@ -358,6 +383,13 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::MultipadPattern { pattern, dir } => multipad(&dev, pattern, &dir),
+        Command::Screens { project } => list_screens(&dev, project),
+        Command::ExportScreen { slot, out, project } => export_screen(&dev, &slot, &out, project),
+        Command::ImportScreen {
+            slot,
+            file,
+            project,
+        } => import_screen(&dev, &slot, &file, project),
         Command::Preview { pad, ms } => Ok(dev.preview(pad, std::time::Duration::from_millis(ms))?),
         Command::MkiiExit => Ok(dev.mkii_exit()?),
         Command::MoveSample { from, to, exchange } => {
@@ -587,6 +619,56 @@ fn export_project(dev: &Device, project: u8, dir: &Path) -> Result<()> {
         "{files} files, {bytes} bytes -> {}",
         dir.join(root).display()
     );
+    Ok(())
+}
+
+fn list_screens(dev: &Device, project: Option<u8>) -> Result<()> {
+    let project = current_project(dev, project)?;
+    let pixels = (picture::WIDTH * picture::HEIGHT) as f32;
+    for slot in screens::slots() {
+        let Some(bytes) = dev.read_screen(project, slot)? else {
+            println!("{slot:<16}  missing");
+            continue;
+        };
+        match picture::decode(&bytes) {
+            Ok(rows) => {
+                let lit: u32 = rows.iter().map(|b| b.count_ones()).sum();
+                println!(
+                    "{slot:<16}  {:>5} bytes  {lit:>4} pixels lit ({:.0}%)",
+                    bytes.len(),
+                    lit as f32 * 100.0 / pixels
+                );
+            }
+            Err(e) => println!("{slot:<16}  {:>5} bytes  unreadable: {e}", bytes.len()),
+        }
+    }
+    Ok(())
+}
+
+fn export_screen(dev: &Device, slot: &str, out: &Path, project: Option<u8>) -> Result<()> {
+    let project = current_project(dev, project)?;
+    let bytes = dev
+        .read_screen(project, slot)?
+        .with_context(|| format!("project {project} has no {slot} image"))?;
+    fs::write(out, &bytes)?;
+    println!("{slot}: {} bytes -> {}", bytes.len(), out.display());
+    Ok(())
+}
+
+fn import_screen(dev: &Device, slot: &str, file: &Path, project: Option<u8>) -> Result<()> {
+    let current = dev.status()?.project + 1;
+    let project = match project {
+        Some(p) => project_index(p)? + 1,
+        None => current,
+    };
+    if project != current {
+        bail!("project {current} is current; select project {project} first");
+    }
+    // Re-encode, so anything the device would not read is rejected here.
+    let rows =
+        picture::decode(&fs::read(file)?).with_context(|| format!("reading {}", file.display()))?;
+    dev.write_screen(project, slot, &picture::encode(&rows)?)?;
+    println!("{slot}: project {project} updated; the device shows it at the next project load");
     Ok(())
 }
 

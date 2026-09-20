@@ -8,12 +8,13 @@ import {
   type PadOperation,
   type PadState,
   type PortInfo,
+  type ScreenImage,
   type Status,
   type Waveform,
 } from "./api";
 import { bankOf, bpm, padLabel } from "./format";
 
-export type Tab = "samples" | "patterns" | "settings";
+export type Tab = "samples" | "patterns" | "screens" | "settings";
 
 interface Toast {
   id: number;
@@ -49,8 +50,10 @@ export const store = reactive({
   projects: [] as string[],
   pads: [] as Pad[],
   patterns: [] as boolean[],
+  screens: [] as ScreenImage[],
   padsLoading: false,
   patternsLoading: false,
+  screensLoading: false,
   switchingProject: false,
   tab: "samples" as Tab,
   bank: 0,
@@ -172,6 +175,7 @@ function resetDevice() {
   store.projects = [];
   store.pads = [];
   store.patterns = [];
+  store.screens = [];
   store.selectedPad = null;
   store.selectedPattern = null;
   store.detail = null;
@@ -186,8 +190,10 @@ export async function loadProject() {
   store.projects = await api.projectNames();
   await loadPads();
   store.patterns = [];
+  store.screens = [];
   if (store.selectedPad !== null) await selectPad(store.selectedPad);
   if (store.tab === "patterns") await loadPatterns();
+  if (store.tab === "screens") await loadScreens();
 }
 
 export async function loadPads() {
@@ -210,6 +216,51 @@ export async function loadPatterns() {
   } finally {
     store.patternsLoading = false;
   }
+}
+
+export async function loadScreens() {
+  store.screensLoading = true;
+  try {
+    store.screens = (await api.screens()).slots;
+  } catch (e) {
+    handleError(e);
+  } finally {
+    store.screensLoading = false;
+  }
+}
+
+/** Store one display image in the current project's PICTURE folder. */
+export async function applyScreen(slot: string, rows: number[]): Promise<boolean> {
+  store.pending++;
+  try {
+    replaceScreen(await api.setScreen(slot, rows));
+    return true;
+  } catch (e) {
+    handleError(e);
+    return false;
+  } finally {
+    store.pending--;
+  }
+}
+
+/** Put back the image a slot held before this app first changed it. */
+export async function restoreScreen(slot: string): Promise<boolean> {
+  store.pending++;
+  try {
+    replaceScreen(await api.restoreScreen(slot));
+    return true;
+  } catch (e) {
+    handleError(e);
+    return false;
+  } finally {
+    store.pending--;
+  }
+}
+
+function replaceScreen(screen: ScreenImage) {
+  const i = store.screens.findIndex((s) => s.slot === screen.slot);
+  if (i >= 0) store.screens[i] = screen;
+  else store.screens.push(screen);
 }
 
 export async function refresh() {

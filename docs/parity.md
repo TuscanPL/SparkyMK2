@@ -30,6 +30,8 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 - Offline `PADCONF.BIN` reader (project backups)
 - Analyze BPM and Set BPM by St/End (host-side, app rules), Auto Detect BPM on import
 - Key detection (an extra; the official app has none)
+- Display images: read and replace a project's startup and screen saver frames (an
+  extra; the official app only writes them as part of Import to MKII)
 
 ## Connection
 
@@ -97,6 +99,13 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 | Tempo Select (Project / Bank), Project Tempo, Bank A–J Tempo and Volume | ✅ |
 | Bank protect | ✅ (the app blocks edits on protected banks itself) |
 | Project rename | ✅ |
+
+## Screens tab (not in the official app)
+
+| Feature | Protocol |
+|---|---|
+| Read `PICTURE/*.bmp` of the current project | ✅ file API |
+| Replace a startup or screen saver frame | ✅ plain file write; no reload needed |
 
 ## App settings (local only)
 

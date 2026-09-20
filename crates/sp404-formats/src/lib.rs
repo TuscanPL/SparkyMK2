@@ -3,6 +3,7 @@
 pub mod audio;
 pub mod padconf;
 pub mod pattern;
+pub mod picture;
 pub mod smf;
 pub mod smp;
 pub mod wav;
@@ -27,6 +28,8 @@ pub enum FormatError {
     UnsupportedPadconf(u8),
     #[error("invalid pattern file: {0}")]
     BadPattern(&'static str),
+    #[error("invalid display image: {0}")]
+    BadPicture(&'static str),
     #[error("no audio track found")]
     NoAudioTrack,
     #[error("file has no audio")]

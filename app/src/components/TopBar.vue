@@ -8,6 +8,7 @@ import { disconnect, refresh, selectProject, store, type Tab } from "../store";
 const tabs: { id: Tab; label: string }[] = [
   { id: "samples", label: "Samples" },
   { id: "patterns", label: "Patterns" },
+  { id: "screens", label: "Screens" },
   { id: "settings", label: "Settings" },
 ];
 

@@ -49,6 +49,10 @@ Feature-by-feature progress against the official app is tracked in
   official app's rules.
 - Key detection, which the official app doesn't have.
 
+**Display images**
+- Edit a project's startup animation and screen saver: convert any image to the device's
+  128 x 64 black and white screen, or draw it pixel by pixel, then write it to the card.
+
 **Patterns**
 - List patterns.
 - Export a pattern as a Standard MIDI File, byte-identical to the official app's export.

@@ -121,5 +121,18 @@ See [04-patterns.md](04-patterns.md).
 
 ## `PICTURE/*.bmp`
 
-1086-byte BMPs, i.e. 62-byte header + 1024 bytes. Likely 1-bit monochrome for the device
-screen _(?)_.
+1086-byte BMPs for the device screen: a 62-byte header and 1024 bytes of pixels.
+`startup_1..2` play while the project loads, `screen_saver_1..4` when it sits idle.
+
+| Offset | Size | Field |
+|---|---|---|
+| 00 | 2 | `"BM"` |
+| 02 | 4 | file size (1086) |
+| 06 | 4 | zero |
+| 0A | 4 | pixel data offset (62) |
+| 0E | 40 | `BITMAPINFOHEADER`: 128 × 64, 1 plane, **1 bit per pixel**, `BI_RGB` |
+| 36 | 8 | palette: index 0 black, index 1 white |
+| 3E | 1024 | pixels, 16 bytes per row, **bottom row first**, leftmost pixel in the high bit |
+
+A set bit is a lit pixel. Every project ships the same six images. The device reads them
+when it loads the project, so a file written over USB shows up at the next project load.

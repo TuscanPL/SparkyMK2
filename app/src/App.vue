@@ -6,19 +6,23 @@ import Toasts from "./components/Toasts.vue";
 import TopBar from "./components/TopBar.vue";
 import PatternsTab from "./tabs/PatternsTab.vue";
 import SamplesTab from "./tabs/SamplesTab.vue";
+import ScreensTab from "./tabs/ScreensTab.vue";
 import SettingsTab from "./tabs/SettingsTab.vue";
 import { drag, listenForFileDrops } from "./drag";
 import { padLabel } from "./format";
-import { loadPatterns, resume, store } from "./store";
+import { loadPatterns, loadScreens, resume, store } from "./store";
 
 resume();
 onMounted(listenForFileDrops);
 
-// Pattern slots take 160 requests, so they load when the tab is first opened.
+// Pattern slots take 160 requests, so they load when the tab is first opened. The
+// display images are read from the card the same way.
 watch(
   () => store.tab,
   (tab) => {
-    if (tab === "patterns" && store.connected && !store.patterns.length && !store.patternsLoading) loadPatterns();
+    if (!store.connected) return;
+    if (tab === "patterns" && !store.patterns.length && !store.patternsLoading) loadPatterns();
+    if (tab === "screens" && !store.screens.length && !store.screensLoading) loadScreens();
   },
 );
 </script>
@@ -33,6 +37,7 @@ watch(
       <ConnectScreen v-if="!store.connected" />
       <SamplesTab v-else-if="store.tab === 'samples'" />
       <PatternsTab v-else-if="store.tab === 'patterns'" />
+      <ScreensTab v-else-if="store.tab === 'screens'" />
       <SettingsTab v-else />
     </main>
     <div v-if="drag.from >= 0" class="ghost" :style="{ left: `${drag.x + 12}px`, top: `${drag.y + 12}px` }">

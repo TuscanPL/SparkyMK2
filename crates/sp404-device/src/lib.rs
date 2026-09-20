@@ -7,6 +7,7 @@
 mod control;
 mod files;
 mod render;
+pub mod screens;
 
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};

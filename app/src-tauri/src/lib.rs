@@ -2,6 +2,7 @@
 
 mod commands;
 mod edit;
+mod screens;
 
 use std::sync::{Arc, Mutex};
 
@@ -40,6 +41,9 @@ pub fn run() {
             edit::analyze_bpm,
             edit::set_global_param,
             edit::rename_project,
+            screens::screens,
+            screens::set_screen,
+            screens::restore_screen,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SparkyMK2");
