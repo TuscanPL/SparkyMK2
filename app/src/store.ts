@@ -433,12 +433,23 @@ async function poll() {
   try {
     const status = await api.status();
     lastPollError = "";
-    const projectChanged = store.status !== null && status.project !== store.status.project;
+    const previous = store.status;
+    const projectChanged = previous !== null && status.project !== previous.project;
+    // Edits made on the device happen behind its menu, and it tells us nothing about
+    // them; once the menu closes, everything we hold may be out of date.
+    const leftMenu =
+      previous?.workingMode === 4 && status.workingMode !== null && status.workingMode !== 4;
     store.status = status;
-    if (projectChanged && !store.switchingProject) {
-      store.selectedPad = null;
-      store.selectedPattern = null;
-      await loadProject();
+    if (!store.switchingProject) {
+      if (projectChanged) {
+        store.selectedPad = null;
+        store.selectedPattern = null;
+        await loadProject();
+      } else if (leftMenu) {
+        // The same project, so the selection stays; only its contents are re-read.
+        await loadProject();
+        if (store.card) await reloadCard();
+      }
     }
   } catch (e) {
     const text = errorText(e);
