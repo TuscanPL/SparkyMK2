@@ -5,6 +5,11 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- Windows installers (`.exe` and `.msi`), built for each release alongside the Linux
+  packages. Untested on Windows hardware so far.
+
 ## [0.1.1] - 2026-09-20
 
 ### Fixed

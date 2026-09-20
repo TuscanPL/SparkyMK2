@@ -10,9 +10,32 @@ permissions:
   contents: write
 
 jobs:
+  notes:
+    runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.notes.outputs.body }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes=$(awk -v v="$version" 'index($0, "## [" v "]") == 1 {on = 1; next} /^## \[/ {on = 0} on' CHANGELOG.md)
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+          {
+            echo "body<<SPARKY_NOTES"
+            printf '%s\n' "$notes"
+            echo "SPARKY_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
   linux:
+    needs: notes
     # The oldest supported Ubuntu, so the AppImage and .deb run on older distributions too.
     runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v4
 
@@ -38,21 +61,6 @@ jobs:
         working-directory: app
         run: npm ci
 
-      - name: Release notes from CHANGELOG.md
-        id: notes
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          notes=$(awk -v v="$version" 'index($0, "## [" v "]") == 1 {on = 1; next} /^## \[/ {on = 0} on' CHANGELOG.md)
-          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
-            echo "CHANGELOG.md has no section for $version" >&2
-            exit 1
-          fi
-          {
-            echo "body<<SPARKY_NOTES"
-            printf '%s\n' "$notes"
-            echo "SPARKY_NOTES"
-          } >> "$GITHUB_OUTPUT"
-
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,6 +71,40 @@ jobs:
           projectPath: app
           tagName: ${{ github.ref_name }}
           releaseName: SparkyMK2 ${{ github.ref_name }}
-          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseBody: ${{ needs.notes.outputs.body }}
           releaseDraft: true
           args: --bundles deb,rpm,appimage
+
+  windows:
+    needs: notes
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test the core
+        run: cargo test --locked
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: SparkyMK2 ${{ github.ref_name }}
+          releaseBody: ${{ needs.notes.outputs.body }}
+          releaseDraft: true
+          args: --bundles msi,nsis

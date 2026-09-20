@@ -72,9 +72,14 @@ what they need:
 | Fedora | `sparkymk2-X.Y.Z-1.x86_64.rpm` | `sudo dnf install ./sparkymk2-*.x86_64.rpm` |
 | Arch, CachyOS, Manjaro | from the AUR | `yay -S sparkymk2` or `paru -S sparkymk2` |
 | Other distributions | `sparkymk2_X.Y.Z_amd64.AppImage` | `chmod +x sparkymk2_*.AppImage`, then run it |
+| Windows 10 or 11 | `sparkymk2_X.Y.Z_x64-setup.exe` | run it; Windows warns first, because the installer is not signed |
 
 The .deb, .rpm and AUR packages let the logged-in user open the SP-404MKII straight away.
 With the AppImage, set up serial port access once (see [Linux setup](#linux-setup)).
+
+The Windows build is new. The protocol work and the command-line tool both come from
+Windows, but the app itself has not been tried there yet; reports are welcome. Windows
+needs no driver or extra setup: the sampler appears as a COM port, and the app finds it.
 
 ## Building
 
