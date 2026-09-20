@@ -70,7 +70,7 @@ enum Command {
     /// List a directory (default: ROLAND/SP-404MKII). Prefix with `SD:` for the SD card,
     /// e.g. `SD:IMPORT`; plain paths address the device's own storage.
     Ls { path: Option<String> },
-    /// Download a file from the card.
+    /// Download a file. Prefix the remote path with `SD:` for the SD card.
     Get { remote: String, local: PathBuf },
     /// Download a whole project folder (1-based project number).
     ExportProject { project: u8, dir: PathBuf },
@@ -219,15 +219,15 @@ enum Command {
     RenameSample { pad: PadIndex, name: String },
     /// Rename a project (1-based project number).
     RenameProject { project: u8, name: String },
-    /// Upload a file to the card, replacing it if it exists.
+    /// Upload a file, replacing it if it exists. Prefix with `SD:` for the SD card.
     Put { local: PathBuf, remote: String },
-    /// Delete a file from the card.
+    /// Delete a file.
     Rm { remote: String },
-    /// Move or rename a file or directory on the card.
+    /// Move or rename a file or directory.
     Mv { from: String, to: String },
-    /// Create a directory on the card.
+    /// Create a directory.
     Mkdir { remote: String },
-    /// Remove an empty directory from the card.
+    /// Remove an empty directory.
     Rmdir { remote: String },
     /// Replace a display image with a 128x64 one-bit BMP.
     ImportScreen {
@@ -256,7 +256,7 @@ enum Command {
         /// Bank letter for samples-bank / patterns-bank.
         #[arg(long)]
         bank: Option<char>,
-        /// Required: this erases data on the card.
+        /// Required: this erases data in the device's own storage.
         #[arg(long)]
         yes: bool,
     },
@@ -830,7 +830,7 @@ fn restore_project(dev: &Device, project: u8, dir: &Path, yes: bool) -> Result<(
     }
     let free = u64::from(dev.free_kb()?) * 1024;
     if total as u64 > free {
-        bail!("not enough space on the card ({free} bytes free)");
+        bail!("not enough space on the device ({free} bytes free)");
     }
     // Restoring erases the current project first, so the target must be selected.
     if dev.current_project()? != index {

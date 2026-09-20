@@ -516,7 +516,8 @@ const OPERATIONS: Record<PadOperation, { title: string; message: string; action:
   },
   delete: {
     title: "Delete sample?",
-    message: "The sample is erased from the pad and the SD card. This can't be undone.",
+    message:
+      "The sample is erased from the pad and from the project on the device. Nothing on the SD card is touched. This can't be undone.",
     action: "Delete",
     busy: "Deleting",
   },

@@ -141,7 +141,7 @@ export interface Transfer {
   total: number;
 }
 
-/** One display image of a project, as it is on the card. */
+/** One display image of a project, as it is in the device's own storage. */
 export interface ScreenImage {
   slot: string;
   /** Packed rows, 16 bytes per row, top row first; null when the slot has no usable file. */

@@ -129,7 +129,7 @@ async function onDelete() {
     : "";
   const answer = await ask(
     `Delete this ${what}?`,
-    `${entry.path} is removed from the card. ${
+    `${entry.path} is removed from ${volume.value === "card" ? "the SD card" : "the device"}. ${
       entry.isDir ? "Only empty folders can go." : "This cannot be undone."
     }${warning}`,
     [
