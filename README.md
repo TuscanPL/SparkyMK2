@@ -4,6 +4,8 @@ An open-source editor and librarian for the **Roland SP-404MKII**, built for Lin
 The goal is feature parity with Roland's official SP-404MKII App (Windows/macOS): manage
 samples, pads, patterns and projects on the device over USB.
 
+![The Samples tab: pad grid, waveform with start, end and loop markers, and pad parameters](docs/screenshot.png)
+
 > Not affiliated with or endorsed by Roland Corporation. "SP-404MKII" and "Roland" are
 > trademarks of Roland Corporation.
 
