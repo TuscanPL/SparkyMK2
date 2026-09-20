@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-20
+
 ### Added
 
 - Screens tab: a Move tool frames a loaded image. Drag it around, scroll to zoom, and
