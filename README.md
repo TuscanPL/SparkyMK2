@@ -85,6 +85,7 @@ what they need:
 | Arch, CachyOS, Manjaro | from the AUR | `yay -S sparkymk2` or `paru -S sparkymk2` |
 | Other distributions | `sparkymk2_X.Y.Z_amd64.AppImage` | `chmod +x sparkymk2_*.AppImage`, then run it |
 | Windows 10 or 11 | `sparkymk2_X.Y.Z_x64-setup.exe` | run it; Windows warns first, because the installer is not signed |
+| macOS, Apple Silicon | `sparkymk2_X.Y.Z_aarch64.dmg` | open it, drag the app to Applications, then see [macOS setup](#macos-setup) |
 
 The .deb, .rpm and AUR packages let the logged-in user open the SP-404MKII straight away.
 With the AppImage, set up serial port access once (see [Linux setup](#linux-setup)).
@@ -92,6 +93,21 @@ With the AppImage, set up serial port access once (see [Linux setup](#linux-setu
 The Windows build is new. The protocol work and the command-line tool both come from
 Windows, but the app itself has not been tried there yet; reports are welcome. Windows
 needs no driver or extra setup: the sampler appears as a COM port, and the app finds it.
+
+The macOS build is new too, and has not been tried on a Mac yet. It is Apple Silicon
+only; on Intel, build from source. No driver or group membership is needed there: the
+sampler appears as `/dev/cu.usbmodem…` and the app finds it.
+
+### macOS setup
+
+The app is not signed — there is no Apple Developer account behind this project — so
+macOS quarantines it and says it "is damaged and can't be opened". It is not damaged;
+that is what Gatekeeper says about anything unsigned from the internet. Open it once with
+**right-click → Open → Open**, or clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/sparkymk2.app
+```
 
 ## Building
 

@@ -5,6 +5,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- A macOS build: each release now carries an Apple Silicon `.dmg` alongside the Linux and
+  Windows downloads. It is unsigned, so macOS quarantines it on first open; the README
+  says how to get past that. Untested on a Mac so far.
+
 ## [0.4.2] - 2026-09-20
 
 ### Added

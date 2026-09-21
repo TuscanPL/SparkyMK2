@@ -30,8 +30,9 @@ Push the tag by itself. When a branch and a tag go up in the same push, GitHub d
 tag event and the release workflow never starts.
 
 The tag starts `.github/workflows/release.yml`. It runs the core tests, builds the `.deb`,
-`.rpm` and AppImage on Ubuntu 22.04, and creates a **draft** release with the version's
-changelog section as its notes. Check it on the Releases page, then publish it.
+`.rpm` and AppImage on Ubuntu 22.04, the `.exe` and `.msi` on Windows and an unsigned
+`.dmg` on macOS, and creates a **draft** release with the version's changelog section as
+its notes. Check it on the Releases page, then publish it.
 
 ## 4. Update the AUR package
 

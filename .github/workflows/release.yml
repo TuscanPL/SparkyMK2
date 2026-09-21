@@ -108,3 +108,41 @@ jobs:
           releaseBody: ${{ needs.notes.outputs.body }}
           releaseDraft: true
           args: --bundles msi,nsis
+
+  macos:
+    needs: notes
+    # Apple Silicon; the DMG is arm64 only. macOS ships WebKit, so there is nothing to
+    # install first.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test the core
+        run: cargo test --locked
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      # Unsigned: there is no Apple Developer account behind this, so Gatekeeper
+      # quarantines the download. The README says how to open it.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: SparkyMK2 ${{ github.ref_name }}
+          releaseBody: ${{ needs.notes.outputs.body }}
+          releaseDraft: true
+          args: --bundles dmg
