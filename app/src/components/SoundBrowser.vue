@@ -5,12 +5,21 @@
 //
 // Once it has focus, the arrow keys walk the list and each sound plays as it is reached,
 // so a folder of samples can be auditioned without reaching for the mouse.
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import Icon from "./Icon.vue";
 import { api, errorText, type CardEntry } from "../api";
 import { clickAfterDrag, drag, pressSound } from "../drag";
-import { auditionPreview, playPreview, playable, preview, stopPreview } from "../preview";
-import { notify } from "../store";
+import {
+  auditionPreview,
+  cancelPreload,
+  playPreview,
+  playable,
+  preload,
+  preloadFolder,
+  preview,
+  stopPreview,
+} from "../preview";
+import { notify, store } from "../store";
 
 const path = ref("");
 const entries = ref<CardEntry[]>([]);
@@ -29,6 +38,7 @@ async function go(to: string, select?: string) {
     entries.value = listing.entries.filter((e) => e.isDir || playable(e.name));
     cursor.value = select ? entries.value.findIndex((e) => e.name === select) : -1;
     if (cursor.value >= 0) nextTick(() => reveal(cursor.value));
+    if (store.prefs.preloadFolders) preloadFolder("card", entries.value);
   } catch (e) {
     notify(errorText(e));
   } finally {
@@ -37,6 +47,8 @@ async function go(to: string, select?: string) {
 }
 
 onMounted(() => go("IMPORT"));
+// Leaving the Samples tab leaves the folder: stop filling the cache for it.
+onUnmounted(cancelPreload);
 
 function up() {
   if (!path.value) return;
@@ -99,9 +111,12 @@ function onKey(event: KeyboardEvent) {
   event.preventDefault();
 }
 
-function onRow(entry: CardEntry, i: number) {
+function onRow(entry: CardEntry, i: number, event: MouseEvent) {
   // A drag that ended on a pad also lands a click here; that is not a request to play.
   if (clickAfterDrag()) return;
+  // Nor is the second click of a double-click: it would stop the sound the first one
+  // started, or, on a folder, land on a row of the folder just opened.
+  if (event.detail > 1) return;
   cursor.value = i;
   // Take the keyboard, so the arrows carry on from the row just clicked.
   list.value?.focus({ preventScroll: true });
@@ -118,6 +133,9 @@ function onRow(entry: CardEntry, i: number) {
       <span class="where mono" :title="path || 'SD card'">{{ path || "SD card" }}</span>
       <span v-if="loading" class="spinner" />
       <div class="spacer" />
+      <span v-if="preload.running" class="loaded mono" title="Fetching this folder's sounds">
+        {{ preload.done }}/{{ preload.total }}
+      </span>
       <button class="ghost icon" title="Reload" :disabled="loading" @click="go(path)">
         <Icon name="refresh" />
       </button>
@@ -131,7 +149,7 @@ function onRow(entry: CardEntry, i: number) {
         class="row"
         :class="{ sound: !entry.isDir, playing: preview.playing === entry.path, current: i === cursor }"
         @pointerdown="!entry.isDir && pressSound($event, { volume: 'card', path: entry.path, name: entry.name })"
-        @click="onRow(entry, i)"
+        @click="onRow(entry, i, $event)"
       >
         <span v-if="preview.loading === entry.path" class="spinner" />
         <Icon v-else :name="entry.isDir ? 'folder' : preview.playing === entry.path ? 'stop' : 'play'" />
@@ -176,6 +194,11 @@ function onRow(entry: CardEntry, i: number) {
 
 .spacer {
   flex: 1;
+}
+
+.loaded {
+  font-size: 11px;
+  color: var(--faint);
 }
 
 .rows {

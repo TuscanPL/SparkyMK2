@@ -12,6 +12,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   goes back up to the folder just left, Space replays, Home and End jump to either end.
 - Sounds already heard play again at once instead of being read over USB a second time,
   and holding an arrow key skips ahead without fetching every sound it passes.
+- The Files tab browses the same way: a click on a sound plays it, and the arrow keys,
+  Enter, Backspace, Space, Home and End work as they do in the Import browser.
+- Settings → App → *Preload sounds when a folder opens*: every sound in a folder is
+  fetched as it opens, so browsing it plays each one at once. Off by default, since it
+  keeps the device busy for longer. The folder is usable while it loads, and a sound
+  clicked meanwhile waits behind one file, not the whole folder.
 
 - A macOS build: each release now carries an Apple Silicon `.dmg` alongside the Linux and
   Windows downloads. It is unsigned, so macOS quarantines it on first open; the README

@@ -3,7 +3,7 @@ import { ref, watch } from "vue";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import { PROJECT_NAME_LEN, bpm, storage } from "../format";
-import { renameProject, setGlobalParam, store } from "../store";
+import { renameProject, savePrefs, setGlobalParam, store } from "../store";
 
 const locked = () => store.status?.workingMode === 4;
 
@@ -154,6 +154,24 @@ function commitVolume(letter: string, current: number) {
     </section>
 
     <p class="note muted">Changes go to the SP-404MKII as soon as you make them.</p>
+
+    <section class="panel app">
+      <div class="label">App</div>
+      <label class="pref">
+        <span class="switch">
+          <input v-model="store.prefs.preloadFolders" type="checkbox" @change="savePrefs" />
+          <span />
+        </span>
+        <span>
+          Preload sounds when a folder opens
+          <span class="muted hint">
+            Every sound in a folder is fetched as soon as it opens, in the Files tab and the
+            Import browser, so browsing it plays each one at once. Opening a folder keeps the
+            device busy for longer while it loads.
+          </span>
+        </span>
+      </label>
+    </section>
   </div>
 </template>
 
@@ -175,8 +193,28 @@ function commitVolume(letter: string, current: number) {
   padding: 16px;
 }
 
-.banks {
+.banks,
+.app {
   grid-column: 1 / -1;
+}
+
+.app {
+  padding: 16px;
+}
+
+.pref {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.pref .hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  max-width: 640px;
 }
 
 .project {

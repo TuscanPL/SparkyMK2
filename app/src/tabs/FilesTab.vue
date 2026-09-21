@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon.vue";
 import { errorText, type CardEntry, type Transfer, type Volume } from "../api";
 import { bytes as formatBytes, storage } from "../format";
-import { playPreview, playable, preview, stopPreview } from "../preview";
+import {
+  auditionPreview,
+  cancelPreload,
+  playPreview,
+  playable,
+  preload,
+  preloadFolder,
+  preview,
+  stopPreview,
+} from "../preview";
 import {
   ask,
   createCardFolder,
@@ -19,6 +28,7 @@ import {
 } from "../store";
 
 const selected = ref<CardEntry | null>(null);
+const listEl = ref<HTMLElement>();
 const renaming = ref<string | null>(null);
 const renameText = ref("");
 let unlisten: UnlistenFn | undefined;
@@ -31,16 +41,22 @@ const volumes: { id: Volume; label: string; hint: string }[] = [
 
 onMounted(async () => {
   unlisten = await listen<Transfer>("transfer", (e) => (store.transfer = e.payload));
-  if (!store.card) await loadCard("card", "");
+  if (!store.card) await go("", "card");
+  // Coming back to the tab: fill in whatever of this folder is not cached yet.
+  else if (store.prefs.preloadFolders) preloadFolder(store.card.volume, store.card.entries);
 });
 
 onUnmounted(() => {
   unlisten?.();
   stopPreview();
+  cancelPreload();
 });
 
 const volume = computed<Volume>(() => store.card?.volume ?? "card");
 const path = computed(() => store.card?.path ?? "");
+const entries = computed(() => store.card?.entries ?? []);
+/** Where the keyboard is: the selected row. Listings are rebuilt, so match by path. */
+const cursor = computed(() => entries.value.findIndex((e) => e.path === selected.value?.path));
 const hint = computed(() => volumes.find((v) => v.id === volume.value)?.hint ?? "");
 
 /** The path split into the steps of a breadcrumb, root first. */
@@ -59,21 +75,91 @@ function isProjectFile(entry: CardEntry): boolean {
   return entry.name.endsWith(".bin");
 }
 
-async function go(to: string, to_volume: Volume = volume.value) {
+/** Open a folder; `select` names the entry to land on, such as the folder just left. */
+async function go(to: string, to_volume: Volume = volume.value, select?: string) {
   selected.value = null;
   renaming.value = null;
   stopPreview();
   await loadCard(to_volume, to);
+  if (select) {
+    selected.value = entries.value.find((e) => e.name === select) ?? null;
+    nextTick(() => reveal(cursor.value));
+  }
+  if (store.prefs.preloadFolders && store.card) preloadFolder(store.card.volume, store.card.entries);
 }
 
 function up() {
+  if (!path.value) return;
   const i = path.value.lastIndexOf("/");
-  go(i < 0 ? "" : path.value.slice(0, i));
+  // Land back on the folder we came out of, as file managers do.
+  go(i < 0 ? "" : path.value.slice(0, i), volume.value, path.value.slice(i + 1));
 }
 
-function openEntry(entry: CardEntry) {
+function openEntry(entry: CardEntry | null | undefined) {
+  if (!entry) return;
   if (entry.isDir) go(entry.path);
   else if (playable(entry.name)) playPreview(volume.value, entry.path, entry.size);
+}
+
+function reveal(i: number) {
+  listEl.value?.querySelector(`[data-index="${i}"]`)?.scrollIntoView({ block: "nearest" });
+}
+
+/** Select a row from the keyboard; a sound plays as soon as it is reached. */
+function move(i: number) {
+  if (i < 0 || i >= entries.value.length || i === cursor.value) return;
+  const entry = entries.value[i];
+  selected.value = entry;
+  renaming.value = null;
+  reveal(i);
+  if (!entry.isDir && playable(entry.name)) auditionPreview(volume.value, entry.path, entry.size);
+  else stopPreview();
+}
+
+function onKey(event: KeyboardEvent) {
+  // The rename box sits inside the list; keys typed there are for the name, not the list.
+  if ((event.target as HTMLElement).closest("input")) return;
+  const last = entries.value.length - 1;
+  const current = selected.value;
+  switch (event.key) {
+    case "ArrowDown":
+      move(Math.min(last, cursor.value + 1));
+      break;
+    case "ArrowUp":
+      move(Math.max(0, cursor.value - 1));
+      break;
+    case "Home":
+      move(0);
+      break;
+    case "End":
+      move(last);
+      break;
+    case "Enter":
+    case "ArrowRight":
+      openEntry(current);
+      break;
+    case "Backspace":
+    case "ArrowLeft":
+      up();
+      break;
+    case " ":
+      if (current && !current.isDir && playable(current.name)) {
+        playPreview(volume.value, current.path, current.size);
+      }
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+}
+
+/** A click selects a row and hands the list the keyboard; a sound also plays. */
+function selectRow(entry: CardEntry, event: MouseEvent) {
+  // The second click of a double-click would stop the sound the first one started.
+  if (event.detail > 1) return;
+  selected.value = entry;
+  listEl.value?.focus({ preventScroll: true });
+  if (!entry.isDir && playable(entry.name)) playPreview(volume.value, entry.path, entry.size);
 }
 
 async function onUpload() {
@@ -176,6 +262,9 @@ const percent = computed(() => {
       </nav>
       <span v-if="store.cardLoading" class="spinner" />
       <div class="spacer" />
+      <span v-if="preload.running" class="muted loaded mono" title="Fetching this folder's sounds">
+        Loading sounds {{ preload.done }}/{{ preload.total }}
+      </span>
       <span v-if="store.card?.freeKb != null" class="muted free">{{ storage(store.card.freeKb) }} free</span>
       <button class="ghost icon" title="Reload this folder" @click="go(path)">
         <Icon name="refresh" />
@@ -209,14 +298,15 @@ const percent = computed(() => {
       <span class="mono">{{ store.transfer.name }} · {{ percent }}%</span>
     </div>
 
-    <div class="list panel">
+    <div ref="listEl" class="list panel" tabindex="0" @keydown="onKey">
       <div
-        v-for="entry in store.card?.entries ?? []"
+        v-for="(entry, i) in entries"
         :key="entry.path"
+        :data-index="i"
         class="row"
         :class="{ active: selected?.path === entry.path, playing: preview.playing === entry.path }"
-        @click="selected = entry"
-        @dblclick="openEntry(entry)"
+        @click="selectRow(entry, $event)"
+        @dblclick="entry.isDir && openEntry(entry)"
       >
         <Icon :name="entry.isDir ? 'folder' : 'file'" />
         <input
@@ -238,7 +328,8 @@ const percent = computed(() => {
 
     <p class="muted hint">{{ hint }}</p>
     <p class="muted hint">
-      Double-click a folder to open it. Files can also be dragged in from the file manager.
+      Click a sound to hear it, then use the arrow keys to hear the rest; Enter opens a folder
+      and Backspace goes back. Files can also be dragged in from the file manager.
       Audio is copied as-is — use the Samples tab to put a sound straight on a pad.
     </p>
   </div>
@@ -368,6 +459,15 @@ const percent = computed(() => {
 
 .row.playing .name {
   color: var(--accent);
+}
+
+.list:focus {
+  outline: none;
+  border-color: var(--accent-line);
+}
+
+.loaded {
+  font-size: 12px;
 }
 
 button.active {

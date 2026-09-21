@@ -79,6 +79,8 @@ export const store = reactive({
   prefs: {
     detectBpm: savedPrefs.detectBpm ?? true,
     importOpen: savedPrefs.importOpen ?? true,
+    /** Fetch every sound in a folder as it opens, trading a slower open for instant browsing. */
+    preloadFolders: savedPrefs.preloadFolders ?? false,
     bpmRange: savedPrefs.bpmRange ?? 0,
   },
   toasts: [] as Toast[],
