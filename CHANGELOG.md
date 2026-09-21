@@ -18,7 +18,6 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   way to copy a bank across.
 - Dropping several files that all start with a pad (`C05 …`) onto the pads puts each on
   its own pad, instead of filling the pads in a row. One file still goes where it lands.
-
 - The Import browser takes the keyboard: click a sound, then the arrow keys walk the
   list and each sound plays as it is reached. Enter or → opens a folder, Backspace or ←
   goes back up to the folder just left, Space replays, Home and End jump to either end.
