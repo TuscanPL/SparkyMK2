@@ -7,6 +7,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Added
 
+- The Import browser takes the keyboard: click a sound, then the arrow keys walk the
+  list and each sound plays as it is reached. Enter or → opens a folder, Backspace or ←
+  goes back up to the folder just left, Space replays, Home and End jump to either end.
+- Sounds already heard play again at once instead of being read over USB a second time,
+  and holding an arrow key skips ahead without fetching every sound it passes.
+
 - A macOS build: each release now carries an Apple Silicon `.dmg` alongside the Linux and
   Windows downloads. It is unsigned, so macOS quarantines it on first open; the README
   says how to get past that. Untested on a Mac so far.

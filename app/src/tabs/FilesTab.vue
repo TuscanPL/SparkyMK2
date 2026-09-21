@@ -73,7 +73,7 @@ function up() {
 
 function openEntry(entry: CardEntry) {
   if (entry.isDir) go(entry.path);
-  else if (playable(entry.name)) playPreview(volume.value, entry.path);
+  else if (playable(entry.name)) playPreview(volume.value, entry.path, entry.size);
 }
 
 async function onUpload() {
@@ -190,7 +190,7 @@ const percent = computed(() => {
       <button
         :class="{ active: selected && preview.playing === selected.path }"
         :disabled="!selected || selected.isDir || !playable(selected.name)"
-        @click="selected && playPreview(volume, selected.path)"
+        @click="selected && playPreview(volume, selected.path, selected.size)"
       >
         <span v-if="selected && preview.loading === selected.path" class="spinner" />
         <Icon v-else :name="selected && preview.playing === selected.path ? 'stop' : 'play'" />
