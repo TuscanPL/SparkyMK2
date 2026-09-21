@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon.vue";
-import { errorText, type CardEntry, type Transfer, type Volume } from "../api";
+import { errorText, type CardEntry, type Volume } from "../api";
 import { bytes as formatBytes, storage } from "../format";
 import {
   auditionPreview,
@@ -31,7 +30,6 @@ const selected = ref<CardEntry | null>(null);
 const listEl = ref<HTMLElement>();
 const renaming = ref<string | null>(null);
 const renameText = ref("");
-let unlisten: UnlistenFn | undefined;
 
 /** The card first: its IMPORT folder is what the device's own IMPORT browser reads. */
 const volumes: { id: Volume; label: string; hint: string }[] = [
@@ -40,14 +38,12 @@ const volumes: { id: Volume; label: string; hint: string }[] = [
 ];
 
 onMounted(async () => {
-  unlisten = await listen<Transfer>("transfer", (e) => (store.transfer = e.payload));
   if (!store.card) await go("", "card");
   // Coming back to the tab: fill in whatever of this folder is not cached yet.
   else if (store.prefs.preloadFolders) preloadFolder(store.card.volume, store.card.entries);
 });
 
 onUnmounted(() => {
-  unlisten?.();
   stopPreview();
   cancelPreload();
 });

@@ -17,6 +17,34 @@ export const padIndex = (bank: number, pad: number) => bank * 16 + pad - 1;
 export const padLabel = (index: number) => `${BANK_LETTERS[Math.floor(index / 16)]}${(index % 16) + 1}`;
 export const bankOf = (index: number) => Math.floor(index / 16);
 
+/** The export file name prefix for a pad: `C05`, zero-padded so names sort in pad order. */
+export const exportLabel = (index: number) =>
+  `${BANK_LETTERS[Math.floor(index / 16)]}${String((index % 16) + 1).padStart(2, "0")}`;
+
+/**
+ * The pad a file name starts with, as an export names them (`C05 Kick.wav` is C5), or
+ * null. Mirrors `export::pad_of` in the backend.
+ */
+export function padFromName(name: string): number | null {
+  const m = /^([A-J])(\d{2})(?: |$)/i.exec(name);
+  if (!m) return null;
+  const pad = Number(m[2]);
+  if (pad < 1 || pad > 16) return null;
+  return (m[1].toUpperCase().charCodeAt(0) - 65) * 16 + pad - 1;
+}
+
+/** Keep a name usable as a folder on the card's FAT filesystem and on the computer. */
+export function fsSafe(name: string): string {
+  const clean = name.replace(/[\/\\:*?"<>|\x00-\x1f]/g, "_").trim().replace(/\.+$/, "");
+  return clean || "Export";
+}
+
+/** `2026-09-21 2030`: sorts by time, and has no colon for FAT. */
+export function exportStamp(date = new Date()): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}${two(date.getMinutes())}`;
+}
+
 export const bpm = (hundredths: number) => (hundredths / 100).toFixed(2);
 
 export function duration(frames: number): string {

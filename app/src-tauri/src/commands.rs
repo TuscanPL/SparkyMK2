@@ -266,7 +266,7 @@ pub struct SampleInfoDto {
     pub(crate) start: u32,
     pub(crate) end: u32,
     pub(crate) loop_top: u32,
-    chop_points: Vec<u32>,
+    pub(crate) chop_points: Vec<u32>,
 }
 
 #[derive(Serialize)]
@@ -274,7 +274,7 @@ pub struct SampleInfoDto {
 pub struct PadDetailDto {
     index: u16,
     label: String,
-    name: String,
+    pub(crate) name: String,
     pub(crate) sample: Option<SampleInfoDto>,
     pub(crate) params: Vec<ParamDto>,
 }

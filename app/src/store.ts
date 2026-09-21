@@ -14,7 +14,7 @@ import {
   type Status,
   type Waveform,
 } from "./api";
-import { bankOf, bpm, padLabel } from "./format";
+import { bankOf, bpm, padFromName, padLabel } from "./format";
 
 export type Tab = "samples" | "patterns" | "screens" | "files" | "settings";
 
@@ -410,7 +410,7 @@ async function loadWaveform(index: number, token: number) {
   }
 }
 
-function dropWaveform(index: number) {
+export function dropWaveform(index: number) {
   for (const key of [...waveCache.keys()]) if (key.split(":")[1] === String(index)) waveCache.delete(key);
 }
 
@@ -591,7 +591,13 @@ export async function importFiles(paths: string[], start: number) {
   const sorted = [...paths].sort((a, b) =>
     fileName(a).localeCompare(fileName(b), undefined, { numeric: true, sensitivity: "base" }),
   );
-  const targets = sorted.slice(0, 160 - start).map((path, i) => ({ path, index: start + i }));
+  // Several files that all name their pads (C05 Kick.wav), as an export does, go back to
+  // those pads, gaps and all. One file goes where it is dropped, whatever its name.
+  const named = sorted.map((path) => ({ path, index: padFromName(fileName(path)) }));
+  const byName = named.length > 1 && named.every((t) => t.index !== null);
+  const targets = byName
+    ? (named as { path: string; index: number }[])
+    : sorted.slice(0, 160 - start).map((path, i) => ({ path, index: start + i }));
   if (!targets.length) return;
   const blocked = targets.map((t) => editBlock(t.index)).find(Boolean);
   if (blocked) {
@@ -608,7 +614,9 @@ export async function importFiles(paths: string[], start: number) {
     );
     if (!ok) return;
   }
-  if (paths.length > targets.length) notify(`Only ${targets.length} of ${paths.length} files fit before J16.`, "info");
+  if (!byName && paths.length > targets.length) {
+    notify(`Only ${targets.length} of ${paths.length} files fit before J16.`, "info");
+  }
   for (const t of targets) store.working[t.index] = "Waiting";
   for (const t of targets) {
     store.working[t.index] = "Importing";

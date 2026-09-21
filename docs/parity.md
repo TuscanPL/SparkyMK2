@@ -77,7 +77,8 @@ Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
 | Auto Detect BPM | ✅ host-side (`sp404-dsp`, `import --detect-bpm`), same range presets, folding and rounding as the app; the detector itself is our own |
 | BPM detect range setting (from the device) | 🟡 presets known; the device message that carries the setting is not identified |
 | Key | 🟡 the app has no detector: pad parameter `89` (Camelot index) is set on the device side; SparkyMK2 adds its own key detection as an extra |
-| Export sample as WAV | ✅ |
+| Export sample as WAV | ✅ one pad, a bank or the whole project, to the card or the computer |
+| Export with settings, restore to the same pads | ✅ an extra; `sparkymk2.json` beside the WAVs carries every pad's settings, and a restore keeps gaps |
 | Export pattern as SMF | ✅ host-side conversion |
 | Export pattern as Bounce | ✅ `B8 1003`; device writes the WAV back over the file API |
 | Export pattern as MULTIPAD | ✅ `B7`, `B8 pad` |

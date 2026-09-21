@@ -46,7 +46,8 @@ Feature-by-feature progress against the official app is tracked in
 - Import WAV, AIFF, FLAC or MP3 at any sample rate, from the computer or by dragging a
   sound off the SD card onto a pad. Audio is converted to the device's
   48 kHz 16-bit format; mono stays mono.
-- Export pad samples to WAV.
+- Export a pad, a bank or a whole project as WAV files, to the SD card or the computer, and
+  restore them onto the same pads later with all their settings, gaps included.
 - Read and set every pad parameter: start/end, loop top, level, pitch, time stretch,
   envelopes, chop points and more.
 - Truncate, normalize, delete, rename.

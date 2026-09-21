@@ -8,7 +8,8 @@ import SoundBrowser from "../components/SoundBrowser.vue";
 import ParamField from "../components/ParamField.vue";
 import WaveformView from "../components/WaveformView.vue";
 import { api } from "../api";
-import { BPM_RANGES, PARAM_GROUPS, SAMPLE_NAME_LEN, bpm, duration } from "../format";
+import { BANK_LETTERS, BPM_RANGES, PARAM_GROUPS, SAMPLE_NAME_LEN, bpm, duration } from "../format";
+import { exportSounds, restoreFromComputer } from "../exporting";
 import { drag, pressPad } from "../drag";
 import {
   analyzeBpm,
@@ -27,6 +28,16 @@ const counts = computed(() => {
   const c = new Array(10).fill(0);
   for (const p of store.pads) if (p.hasSample) c[Math.floor(p.index / 16)]++;
   return c;
+});
+
+/** Every pad of the bank on show, and of the project; exports skip the empty ones. */
+const bankPads = computed(() => Array.from({ length: 16 }, (_, i) => store.bank * 16 + i));
+const allPads = Array.from({ length: 160 }, (_, i) => i);
+
+/** How far an export or restore has got, from the pads done out of the pads asked for. */
+const transferPercent = computed(() => {
+  const t = store.transfer;
+  return t && t.total > 0 ? Math.round((t.done / t.total) * 100) : 0;
 });
 
 const pad = (index: number) => store.pads[index];
@@ -103,7 +114,7 @@ async function commitChops(points: number[]) {
         <div class="import panel" :class="{ open: store.prefs.importOpen }">
           <button class="toggle" @click="store.prefs.importOpen = !store.prefs.importOpen; savePrefs()">
             <Icon name="chevron" :class="{ turned: store.prefs.importOpen }" />
-            <span class="label">Import</span>
+            <span class="label">Import &amp; export</span>
           </button>
           <template v-if="store.prefs.importOpen">
             <SoundBrowser />
@@ -120,6 +131,42 @@ async function commitChops(points: number[]) {
                 <option v-for="[value, label] in BPM_RANGES" :key="value" :value="value">{{ label }}</option>
               </select>
             </label>
+
+            <div class="export">
+              <span class="muted">Export as WAV</span>
+              <div class="export-buttons">
+                <button
+                  class="small"
+                  :disabled="store.pending > 0 || !counts[store.bank]"
+                  @click="exportSounds('bank', bankPads)"
+                >
+                  Bank {{ BANK_LETTERS[store.bank] }}
+                </button>
+                <button
+                  class="small"
+                  :disabled="store.pending > 0 || !store.pads.some((p) => p.hasSample)"
+                  @click="exportSounds('project', allPads)"
+                >
+                  Project
+                </button>
+                <button
+                  class="small ghost"
+                  :disabled="store.pending > 0"
+                  title="Put a SparkyMK2 export from this computer back on its pads"
+                  @click="restoreFromComputer"
+                >
+                  Restore…
+                </button>
+              </div>
+            </div>
+            <p class="muted hint">
+              Each sound is named after its pad, with a settings file beside it, so a restore puts
+              every sound back where it was. Restore from the card in the browser above.
+            </p>
+            <div v-if="store.transfer" class="progress">
+              <div class="track"><div class="fill" :style="{ width: `${transferPercent}%` }" /></div>
+              <span class="mono">{{ store.transfer.name }}</span>
+            </div>
           </template>
         </div>
       </section>
@@ -153,6 +200,9 @@ async function commitChops(points: number[]) {
               </button>
               <button :disabled="locked" @click="padOperation(detail.index, 'truncate')">Truncate</button>
               <button :disabled="locked" @click="padOperation(detail.index, 'normalize')">Normalize</button>
+              <button :disabled="store.pending > 0" title="Save this pad's sample as a WAV" @click="exportSounds('pad', [detail.index])">
+                Export…
+              </button>
               <button class="danger" :disabled="locked" @click="padOperation(detail.index, 'delete')">Delete</button>
             </div>
           </header>
@@ -263,6 +313,56 @@ async function commitChops(points: number[]) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.export {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.export-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+button.small {
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.progress .track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+
+.progress .fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.1s linear;
+}
+
+.progress .mono {
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toggle {

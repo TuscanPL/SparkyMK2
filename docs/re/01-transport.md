@@ -89,6 +89,12 @@ card closes the handle itself, and a following `closedir` is refused. Closing a 
 that has *not* been enumerated to the end succeeds. The device's own storage keeps the
 handle open either way.
 
+**`opendir` does not report a missing directory**, on either volume: it hands back a
+handle for a path that does not exist, and `readdir` on it simply ends at once, so the
+path lists as an empty directory. Checked on 2026-09-21 with `IMPORT/NO_SUCH_FOLDER_4f9a`
+and `NO_SUCH_FOLDER_4f9a`. `stat` is the reliable test: it answers −1 with `extra` 2
+(`ENOENT`) for a missing path.
+
 `09`, `0B` and `17` were confirmed against firmware 5.52 on 2026-09-20 by sending them at
 a throwaway path and listing the result. Path ops answer `result` 0 on success and −1 on
 failure, with `extra` carrying an errno: `mkdir` over an existing name gives −1 and 17

@@ -2,6 +2,7 @@
 
 mod commands;
 mod edit;
+mod export;
 mod files;
 mod screens;
 
@@ -55,6 +56,9 @@ pub fn run() {
             files::rename_path,
             files::create_dir,
             files::preview_audio,
+            export::export_pads,
+            export::read_export,
+            export::restore_pads,
         ])
         .run(tauri::generate_context!())
         .expect("error while running SparkyMK2");

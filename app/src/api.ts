@@ -134,6 +134,34 @@ export interface CardListing {
   freeKb: number | null;
 }
 
+/** Where an export goes or a restore comes from: the SD card or a folder on the computer. */
+export type Place = "card" | "local";
+
+/** One pad in an export's `sparkymk2.json`. */
+export interface SavedPad {
+  /** `C05`: the pad it goes back to. */
+  pad: string;
+  file: string;
+  name: string;
+  params: Record<string, number>;
+  chopPoints: number[];
+}
+
+export interface ExportSheet {
+  format: string;
+  version: number;
+  /** The project the pads came from. */
+  project: string;
+  pads: SavedPad[];
+}
+
+export interface ExportSummary {
+  written: number;
+  /** Pads asked for that hold no sample. */
+  empty: number;
+  folder: string;
+}
+
 /** Progress of the transfer in flight, from the `transfer` event. */
 export interface Transfer {
   name: string;
@@ -174,6 +202,10 @@ export const api = {
   screens: () => invoke<ScreenImages>("screens"),
   listVolume: (volume: Volume, path: string) => invoke<CardListing>("list_volume", { volume, path }),
   previewAudio: (volume: Volume, path: string) => invoke<ArrayBuffer>("preview_audio", { volume, path }),
+  exportPads: (pads: number[], target: Place, folder: string, sidecar: boolean) =>
+    invoke<ExportSummary>("export_pads", { pads, target, folder, sidecar }),
+  readExport: (target: Place, folder: string) => invoke<ExportSheet>("read_export", { target, folder }),
+  restorePads: (target: Place, folder: string) => invoke<number>("restore_pads", { target, folder }),
 
   setPadParam: (pad: number, name: string, value: number) =>
     invoke<PadState>("set_pad_param", { pad, name, value }),

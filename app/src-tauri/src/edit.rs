@@ -36,7 +36,7 @@ fn letter(bank: u16) -> char {
 }
 
 /// Refuse to change a pad in a protected bank, as the official app does.
-fn check_unprotected(dev: &Device, pad: PadIndex) -> Result<(), Failure> {
+pub(crate) fn check_unprotected(dev: &Device, pad: PadIndex) -> Result<(), Failure> {
     let project = dev.current_project()?;
     if dev
         .project_settings(project)?
@@ -282,7 +282,7 @@ pub async fn import_from_device(
 }
 
 /// Write a decoded sound to a pad and, if asked, detect and store its tempo.
-fn store_import(
+pub(crate) fn store_import(
     dev: &sp404_device::Device,
     pad: PadIndex,
     imported: audio::Imported,

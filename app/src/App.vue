@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onMounted, watch } from "vue";
+import { listen } from "@tauri-apps/api/event";
+import type { Transfer } from "./api";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import ConnectScreen from "./components/ConnectScreen.vue";
 import Toasts from "./components/Toasts.vue";
@@ -15,6 +17,8 @@ import { loadPatterns, loadScreens, resume, store } from "./store";
 
 resume();
 onMounted(listenForFileDrops);
+// Copies, exports and restores all report progress this way, from whichever tab ran them.
+onMounted(() => listen<Transfer>("transfer", (e) => (store.transfer = e.payload)));
 
 // Pattern slots take 160 requests, so they load when the tab is first opened. The
 // display images are read from the card the same way.

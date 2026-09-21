@@ -20,6 +20,7 @@ import {
   stopPreview,
 } from "../preview";
 import { notify, store } from "../store";
+import { restoreExport } from "../exporting";
 
 const path = ref("");
 const entries = ref<CardEntry[]>([]);
@@ -27,6 +28,8 @@ const loading = ref(false);
 /** The row the keyboard is on, or -1 before the first key. */
 const cursor = ref(-1);
 const list = ref<HTMLElement>();
+/** This folder is a SparkyMK2 export, so its sounds can go back on their own pads. */
+const restorable = ref(false);
 
 /** Open a folder; `select` names the entry to land on, such as the folder just left. */
 async function go(to: string, select?: string) {
@@ -35,6 +38,7 @@ async function go(to: string, select?: string) {
   try {
     const listing = await api.listVolume("card", to);
     path.value = listing.path;
+    restorable.value = listing.entries.some((e) => !e.isDir && e.name === "sparkymk2.json");
     entries.value = listing.entries.filter((e) => e.isDir || playable(e.name));
     cursor.value = select ? entries.value.findIndex((e) => e.name === select) : -1;
     if (cursor.value >= 0) nextTick(() => reveal(cursor.value));
@@ -136,6 +140,15 @@ function onRow(entry: CardEntry, i: number, event: MouseEvent) {
       <span v-if="preload.running" class="loaded mono" title="Fetching this folder's sounds">
         {{ preload.done }}/{{ preload.total }}
       </span>
+      <button
+        v-if="restorable"
+        class="small primary"
+        :disabled="store.pending > 0"
+        title="Put every sound in this export back on its own pad, with its settings"
+        @click="restoreExport('card', path)"
+      >
+        Restore
+      </button>
       <button class="ghost icon" title="Reload" :disabled="loading" @click="go(path)">
         <Icon name="refresh" />
       </button>
@@ -199,6 +212,11 @@ function onRow(entry: CardEntry, i: number, event: MouseEvent) {
 .loaded {
   font-size: 11px;
   color: var(--faint);
+}
+
+button.small {
+  padding: 2px 9px;
+  font-size: 12px;
 }
 
 .rows {

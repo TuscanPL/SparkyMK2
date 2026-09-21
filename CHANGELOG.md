@@ -7,6 +7,18 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Added
 
+- Export pads as WAV files: one pad, a whole bank, or the whole project, to the SD card
+  (in `IMPORT`, where the device's own IMPORT finds them) or to a folder on the computer.
+  Each sound is named after its pad (`C05 Kick.wav`), so a folder sorts in pad order, and
+  a bank or project goes into a folder of its own, named after it and the time.
+- Restore such an export and every sound goes back on its own pad, gaps and all, with its
+  settings: start, end, loop top, chop points, level, pitch, envelope and the rest travel
+  in a `sparkymk2.json` beside the WAVs. Restore from the card in the Import browser, or
+  from the computer with *Restore…*. It can land in another project, which makes it a
+  way to copy a bank across.
+- Dropping several files that all start with a pad (`C05 …`) onto the pads puts each on
+  its own pad, instead of filling the pads in a row. One file still goes where it lands.
+
 - The Import browser takes the keyboard: click a sound, then the arrow keys walk the
   list and each sound plays as it is reached. Enter or → opens a folder, Backspace or ←
   goes back up to the folder just left, Space replays, Home and End jump to either end.
@@ -18,7 +30,6 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   fetched as it opens, so browsing it plays each one at once. Off by default, since it
   keeps the device busy for longer. The folder is usable while it loads, and a sound
   clicked meanwhile waits behind one file, not the whole folder.
-
 - A macOS build: each release now carries an Apple Silicon `.dmg` alongside the Linux and
   Windows downloads. It is unsigned, so macOS quarantines it on first open; the README
   says how to get past that. Untested on a Mac so far.
