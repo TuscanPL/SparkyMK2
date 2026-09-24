@@ -1,5 +1,10 @@
-The SparkyMK2 icon in this folder is "Sampler" by Magnific, from Flaticon:
-https://www.flaticon.com/free-icons/sampler
+The SparkyMK2 "Faceplate" icon is original SP-404-inspired vector artwork
+contributed by diamond-one, created with Codex assistance.
 
-Flaticon's free license asks that the icon be credited wherever it is used;
-the credit is in the project README.
+License: GPL-3.0-or-later, consistent with the rest of this repository.
+Editable sources: source/faceplate.svg, source/faceplate-16.svg,
+and source/faceplate-24.svg. Export details are in README.md in this folder.
+
+No Roland logos, photographs, fonts, or official app assets are embedded.
+"SP-404MKII" and "Roland" are trademarks of Roland Corporation.
+This project is not affiliated with or endorsed by Roland Corporation.

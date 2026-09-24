@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SparkyMK2 Faceplate icon">
+  <g id="icon">
+    <g id="chassis">
+      <path d="M36 48H476L504 76V436L478 464H34L8 436V76Z" fill="#141A20"/>
+      <path d="M44 72H468L480 84V428L466 440H46L32 428V84Z" fill="#CAD1D5"/>
+    </g>
+    <g id="control-knobs" fill="#141A20">
+      <circle cx="100" cy="132" r="34"/>
+      <circle cx="204" cy="132" r="34"/>
+      <circle cx="308" cy="132" r="34"/>
+      <circle cx="412" cy="132" r="34"/>
+    </g>
+    <g id="effects-buttons" fill="#141A20">
+      <path d="M61 216H128L115 258H48Z" fill="#EB9E3A"/>
+      <path d="M44 286H118V328H44Z"/>
+      <path d="M48 356H115L128 398H61Z"/>
+      <path d="M384 216H451L464 258H397Z"/>
+      <path d="M394 286H468V328H394Z"/>
+      <path d="M397 356H464L451 398H384Z"/>
+    </g>
+    <g id="circular-display">
+      <circle cx="256" cy="312" r="114" fill="#141A20"/>
+      <g id="waveform" fill="#F5F6F2">
+        <rect x="188" y="293" width="20" height="38"/>
+        <rect x="217" y="277" width="20" height="70"/>
+        <rect x="246" y="261" width="20" height="102"/>
+        <rect x="275" y="283" width="20" height="58"/>
+        <rect x="304" y="298" width="20" height="28"/>
+      </g>
+    </g>
+  </g>
+</svg>

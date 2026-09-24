@@ -274,8 +274,14 @@ welcome to it.
 
 ## Credits
 
-The app icon is [Sampler icons created by Magnific - Flaticon](https://www.flaticon.com/free-icons/sampler),
-used under Flaticon's free license, which asks for this credit.
+The Faceplate app icon is original SP-404-inspired artwork contributed by
+[diamond-one](https://github.com/diamond-one), under the project's GPL-3.0-or-later
+license. Editable SVG sources and export details are in
+[app/src-tauri/icons/](app/src-tauri/icons/README.md).
+
+The earlier icon visible in the existing screenshot is
+[Sampler by Magnific - Flaticon](https://www.flaticon.com/free-icons/sampler),
+used under Flaticon's free license.
 
 ## License
 

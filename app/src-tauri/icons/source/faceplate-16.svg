@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="SparkyMK2 Faceplate icon, optimized for 16 pixels">
+  <g id="icon">
+    <g id="chassis">
+      <path d="M1 2H15L16 3V13L15 14H1L0 13V3Z" fill="#141A20"/>
+      <path d="M1 3H15V13H1Z" fill="#CAD1D5"/>
+    </g>
+    <g id="control-knobs" fill="#141A20">
+      <circle cx="3" cy="4.7" r="1.2"/>
+      <circle cx="6.3" cy="4.7" r="1.2"/>
+      <circle cx="9.7" cy="4.7" r="1.2"/>
+      <circle cx="13" cy="4.7" r="1.2"/>
+    </g>
+    <g id="effects-buttons" fill="#141A20">
+      <path d="M2 7H4L3.6 8.3H1.6Z" fill="#EB9E3A"/>
+      <path d="M1.5 9H3.7V10.2H1.5Z"/>
+      <path d="M1.6 11H3.6L4 12.3H2Z"/>
+      <path d="M12 7H14L14.4 8.3H12.4Z"/>
+      <path d="M12.3 9H14.5V10.2H12.3Z"/>
+      <path d="M12.4 11H14.4L14 12.3H12Z"/>
+    </g>
+    <g id="circular-display">
+      <circle cx="8" cy="9.75" r="3.2" fill="#141A20"/>
+      <path id="waveform" d="M6 9H7V11H6ZM7.5 8H8.5V12H7.5ZM9 9H10V11H9Z" fill="#F5F6F2"/>
+    </g>
+  </g>
+</svg>
