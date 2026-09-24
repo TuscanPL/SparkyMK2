@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-24
+
 ### Added
 
 - Settings shows the app's version, so a bug report can say which one it is about. ([#2])
