@@ -4,6 +4,7 @@ import {
   api,
   errorText,
   type CardEntry,
+  type ClearParts,
   type CardListing,
   type Volume,
   type Pad,
@@ -830,6 +831,18 @@ export async function analyzeBpm(index: number, mode: "detect" | "length") {
 export async function setGlobalParam(name: string, value: number) {
   const status = await edit(() => api.setGlobalParam(name, value));
   if (status) store.status = status;
+}
+
+/** Clear parts of the current project; see `ClearParts`. Resolves whether it went through. */
+export async function clearProject(project: number, parts: ClearParts): Promise<boolean> {
+  const status = await edit(() => api.clearProject(project, parts));
+  if (!status) return false;
+  store.status = status;
+  store.selectedPad = null;
+  store.selectedPattern = null;
+  await refresh();
+  notify(`Project ${project} cleared`, "info");
+  return true;
 }
 
 export async function renameProject(project: number, name: string) {

@@ -8,6 +8,11 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 ### Added
 
 - Settings shows the app's version, so a bug report can say which one it is about. ([#2])
+- Clear project, in Settings: remove any of samples, patterns, screen images, and settings
+  with the name from the current project, and keep the rest. Settings can only go with
+  samples and patterns (the device's Init "All" takes all three, and the screen images
+  too, so those are put back unless they were ticked). Typing the project's number
+  confirms it. ([#3])
 - The app follows the unit: hit a pad there and the grid moves to its bank and selects it,
   and the pad lights while it sounds. It works the other way too: select a pad in the app
   and the unit selects it, and choosing a bank selects its first pad on both, as the unit
@@ -49,6 +54,7 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 - On macOS the device is listed once, on its `cu.*` port, rather than twice. ([#5])
 
 [#2]: https://github.com/TuscanPL/SparkyMK2/issues/2
+[#3]: https://github.com/TuscanPL/SparkyMK2/issues/3
 [#5]: https://github.com/TuscanPL/SparkyMK2/issues/5
 [#6]: https://github.com/TuscanPL/SparkyMK2/issues/6
 [#7]: https://github.com/TuscanPL/SparkyMK2/issues/7

@@ -4,11 +4,11 @@
 use std::path::Path;
 
 use serde::Serialize;
-use sp404_device::Device;
+use sp404_device::{Device, screens};
 use sp404_dsp::TempoRange;
 use sp404_formats::{Sample, audio, smp};
 use sp404_proto::PadIndex;
-use sp404_proto::control::{MoveMode, PadOp};
+use sp404_proto::control::{InitScope, MoveMode, PadOp};
 use sp404_proto::params::{self, Scope, Target};
 use tauri::State;
 
@@ -422,6 +422,62 @@ pub async fn rename_project(
         let name = printable(&name, PROJECT_NAME_LEN)?;
         dev.set_project_name(project - 1, &name)?;
         Ok(dev.project_names()?)
+    })
+    .await
+}
+
+/// Clear parts of a project (1-based), which must be the current one: the device's Init
+/// only acts on that. Settings can only go with samples and patterns, through Init's "All",
+/// which also deletes `PADCONF.BIN` and with it the name. Display images have no Init of
+/// their own: clearing them deletes their files. Any the caller keeps are put back if
+/// "All" took them.
+#[tauri::command]
+pub async fn clear_project(
+    state: State<'_, AppState>,
+    project: u8,
+    samples: bool,
+    patterns: bool,
+    settings: bool,
+    screen_images: bool,
+) -> CmdResult<StatusDto> {
+    with_device(&state, move |dev| {
+        if !(1..=16).contains(&project) {
+            return Err(format!("no project {project}").into());
+        }
+        let index = project - 1;
+        let kept = if settings && !screen_images {
+            screens::slots()
+                .map(|slot| Ok((slot, dev.read_screen(project, slot)?)))
+                .collect::<Result<Vec<_>, Failure>>()?
+        } else {
+            Vec::new()
+        };
+        if settings {
+            dev.init_project(index, InitScope::All)?;
+        } else {
+            if samples {
+                dev.init_project(index, InitScope::AllSamples)?;
+            }
+            if patterns {
+                dev.init_project(index, InitScope::AllPatterns)?;
+            }
+        }
+        if screen_images {
+            for slot in screens::slots() {
+                let path = screens::screen_path(project, slot)?;
+                if dev.stat(&path)?.is_some() {
+                    dev.unlink(&path)?;
+                }
+            }
+        }
+        for (slot, bmp) in kept {
+            if let Some(bmp) = bmp
+                && dev.read_screen(project, slot)?.as_deref() != Some(bmp.as_slice())
+            {
+                dev.write_screen(project, slot, &bmp)?;
+            }
+        }
+        read_status(dev)
     })
     .await
 }

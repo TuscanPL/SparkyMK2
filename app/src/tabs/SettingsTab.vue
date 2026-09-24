@@ -1,16 +1,50 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { getVersion } from "@tauri-apps/api/app";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import { PROJECT_NAME_LEN, bpm, storage } from "../format";
-import { renameProject, savePrefs, setGlobalParam, store } from "../store";
+import type { ClearParts } from "../api";
+import { clearProject, renameProject, savePrefs, setGlobalParam, store } from "../store";
 
 /** Shown so a bug report can say which version it is about. */
 const version = ref("");
 getVersion().then((v) => (version.value = v));
 
 const locked = () => store.status?.workingMode === 4;
+
+const nothing: ClearParts = { samples: false, patterns: false, settings: false, screenImages: false };
+/** What Clear project will remove. */
+const parts = reactive<ClearParts>({ ...nothing });
+/** The project number, typed to confirm. */
+const confirmText = ref("");
+// Settings go through the device's Init "All", which takes samples and patterns with them.
+watch(
+  () => parts.settings,
+  (on) => {
+    if (on) Object.assign(parts, { samples: true, patterns: true });
+  },
+);
+watch(
+  () => store.status?.project,
+  () => (confirmText.value = ""),
+);
+const canClear = computed(
+  () =>
+    (parts.samples || parts.patterns || parts.settings || parts.screenImages) &&
+    confirmText.value.trim() === String(store.status?.project) &&
+    !locked() &&
+    store.pending === 0,
+);
+
+async function onClear() {
+  const project = store.status?.project;
+  if (!project || !canClear.value) return;
+  if (await clearProject(project, { ...parts })) {
+    Object.assign(parts, nothing);
+    confirmText.value = "";
+  }
+}
 
 /** Tempo text boxes, keyed by setting name, while being typed in. */
 const tempoText = ref<Record<string, string>>({});
@@ -85,6 +119,36 @@ function commitVolume(letter: string, current: number) {
             BPM
           </span>
         </label>
+      </div>
+    </section>
+
+    <section class="panel card clear">
+      <div class="label">Clear project</div>
+      <p class="muted hint">
+        Removes what is ticked from project {{ store.status.project }} and keeps the rest. It
+        cannot be undone: export what you want to keep first.
+      </p>
+      <div class="parts">
+        <label><input v-model="parts.samples" type="checkbox" :disabled="parts.settings" /> Samples</label>
+        <label><input v-model="parts.patterns" type="checkbox" :disabled="parts.settings" /> Patterns</label>
+        <label>
+          <input v-model="parts.screenImages" type="checkbox" /> Screen images
+          <span class="muted">startup and screen savers go back to the SP-404MKII's own</span>
+        </label>
+        <label>
+          <input v-model="parts.settings" type="checkbox" /> Settings and name
+          <span class="muted">tempos and bank settings; takes samples and patterns with them</span>
+        </label>
+      </div>
+      <div class="confirm">
+        <input
+          v-model="confirmText"
+          class="mono"
+          inputmode="numeric"
+          :placeholder="`Type ${store.status.project} to confirm`"
+          :disabled="locked()"
+        />
+        <button class="danger" :disabled="!canClear" @click="onClear">Clear</button>
       </div>
     </section>
 
@@ -181,6 +245,31 @@ function commitVolume(letter: string, current: number) {
 </template>
 
 <style scoped>
+.clear .parts {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.clear .parts label {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.clear .parts .muted {
+  font-size: 12px;
+}
+
+.clear .confirm {
+  display: flex;
+  gap: 8px;
+}
+
+.clear .confirm input {
+  width: 16ch;
+}
+
 .version {
   margin-left: 6px;
   text-transform: none;

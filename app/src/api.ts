@@ -117,6 +117,16 @@ export interface BpmResult {
 export type Volume = "internal" | "card";
 
 /** An entry in a directory on one of the device's volumes. */
+/** What Clear project removes; whatever is false stays. */
+export interface ClearParts {
+  samples: boolean;
+  patterns: boolean;
+  /** Project settings and name. Only possible together with samples and patterns. */
+  settings: boolean;
+  /** Startup and screen saver images. */
+  screenImages: boolean;
+}
+
 /** What the device is doing, polled several times a second. */
 export interface Activity {
   /** 1-based. */
@@ -237,6 +247,7 @@ export const api = {
     invoke<BpmResult>("analyze_bpm", { pad, mode, bpmRange }),
   setGlobalParam: (name: string, value: number) => invoke<Status>("set_global_param", { name, value }),
   renameProject: (project: number, name: string) => invoke<string[]>("rename_project", { project, name }),
+  clearProject: (project: number, parts: ClearParts) => invoke<Status>("clear_project", { project, ...parts }),
   setScreen: (slot: string, rows: number[]) => invoke<ScreenImage>("set_screen", { slot, rows }),
   restoreScreen: (slot: string) => invoke<ScreenImage>("restore_screen", { slot }),
   downloadFile: (volume: Volume, remote: string, local: string) =>

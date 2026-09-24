@@ -257,6 +257,13 @@ The option order matches the app's Init dialog: All, All Samples, Samples Bank,
 All Patterns, Patterns Bank. Verified on a scratch project: Samples Bank C removed only
 bank C's samples, and Patterns Bank A removed only bank A's patterns.
 
+**All also deletes the display images** in `PICTURE/`, along with `PADCONF.BIN`; All
+Samples and All Patterns leave them. Init has no option for the images alone. A deleted
+image file is not written again when the project is selected, and the device shows its
+own image for a missing one, as it does in an empty project. Every used project on the
+test device held the same six stock images. Checked on firmware 5.52 on 2026-09-24 with
+a copy of project 6 restored into empty slot 9, which was emptied again afterwards.
+
 **Import (sample) differences seen with a mono source:**
 - Before writing, the app also renamed the old `BANKb-pp.SMP` to `.TMP` and listed `SMPL`.
 - After the commit it deleted the `.TMP`.
