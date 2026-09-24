@@ -20,6 +20,9 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Changed
 
+- A new app icon, the Faceplate: a sampler's top panel with four knobs, a round display
+  and effect buttons, drawn for SparkyMK2 by diamond-one, with its own drawings for the
+  smallest sizes. ([#1])
 - Preview on the Samples tab plays the pad from its start to its end rather than for at
   most four seconds, turns into a Stop button while it plays, and runs a playhead across
   the waveform. ([#5])
@@ -53,6 +56,7 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   folders saved to the computer. ([#5])
 - On macOS the device is listed once, on its `cu.*` port, rather than twice. ([#5])
 
+[#1]: https://github.com/TuscanPL/SparkyMK2/pull/1
 [#2]: https://github.com/TuscanPL/SparkyMK2/issues/2
 [#3]: https://github.com/TuscanPL/SparkyMK2/issues/3
 [#5]: https://github.com/TuscanPL/SparkyMK2/issues/5
