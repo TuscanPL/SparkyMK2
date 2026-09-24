@@ -5,7 +5,7 @@
 //
 // Once it has focus, the arrow keys walk the list and each sound plays as it is reached,
 // so a folder of samples can be auditioned without reaching for the mouse.
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Icon from "./Icon.vue";
 import { api, errorText, type CardEntry } from "../api";
 import { clickAfterDrag, drag, pressSound } from "../drag";
@@ -56,6 +56,14 @@ async function go(to: string, select?: string) {
 }
 
 onMounted(() => go("IMPORT"));
+// Exports and restores write to the card; once saving is over, read the folder again,
+// staying on the same row.
+watch(
+  () => store.pending,
+  (now, before) => {
+    if (now === 0 && before > 0) go(path.value, entries.value[cursor.value]?.name);
+  },
+);
 // Leaving the Samples tab leaves the folder: stop filling the cache for it.
 onUnmounted(cancelPreload);
 

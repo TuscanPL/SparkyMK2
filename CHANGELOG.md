@@ -19,6 +19,10 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Fixed
 
+- The Files tab and the Import browser read their folder again whenever saving finishes,
+  whether it worked or not, and whenever the Files tab is opened or the top bar's reload
+  button is pressed. Files deleted, imported or exported no longer linger in the list until
+  it is refreshed by hand, and a delete that fails halfway shows what it left. ([#6])
 - Unplugging the device while connected goes back to the connect screen with one message,
   instead of a *Broken pipe* toast for each action and a restart to recover, and the app
   connects again by itself once the device is plugged back in. ([#5])
@@ -30,6 +34,7 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 - On macOS the device is listed once, on its `cu.*` port, rather than twice. ([#5])
 
 [#5]: https://github.com/TuscanPL/SparkyMK2/issues/5
+[#6]: https://github.com/TuscanPL/SparkyMK2/issues/6
 [#7]: https://github.com/TuscanPL/SparkyMK2/issues/7
 
 ## [0.5.0] - 2026-09-21

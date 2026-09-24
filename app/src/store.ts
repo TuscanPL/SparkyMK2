@@ -1,5 +1,5 @@
 // App state shared by all views, and the actions that talk to the device.
-import { reactive } from "vue";
+import { reactive, watch } from "vue";
 import {
   api,
   errorText,
@@ -282,6 +282,16 @@ export async function reloadCard() {
   if (store.card) await loadCard(store.card.volume, store.card.path);
 }
 
+// Whenever saving finishes, the folder in the Files tab is read again, whatever came of it:
+// a delete that failed halfway has still changed the card, and pad edits and exports
+// change files too. The card operations below rely on this rather than reloading.
+watch(
+  () => store.pending,
+  (now, before) => {
+    if (now === 0 && before > 0 && store.tab === "files") reloadCard();
+  },
+);
+
 /** Run a card operation, showing the saving indicator and clearing progress after. */
 async function onCard<T>(run: () => Promise<T>): Promise<T | null> {
   store.pending++;
@@ -303,12 +313,17 @@ function baseName(path: string): string {
 /** Copy local files onto a volume in `dir`; stops at the first failure. */
 export async function uploadToCard(locals: string[], volume: Volume, dir: string) {
   const where = volume === "card" ? "the card" : "the device";
-  for (const local of locals) {
-    const name = baseName(local);
-    const remote = dir ? `${dir}/${name}` : name;
-    if ((await onCard(() => api.uploadFile(local, volume, remote))) === null) break;
+  // Held for the whole batch, so the folder is read once at the end, not after each file.
+  store.pending++;
+  try {
+    for (const local of locals) {
+      const name = baseName(local);
+      const remote = dir ? `${dir}/${name}` : name;
+      if ((await onCard(() => api.uploadFile(local, volume, remote))) === null) return;
+    }
+  } finally {
+    store.pending--;
   }
-  await reloadCard();
   notify(
     locals.length === 1
       ? `${baseName(locals[0])} copied to ${where}`
@@ -326,18 +341,15 @@ export async function downloadFromCard(volume: Volume, path: string, isDir: bool
 
 export async function deleteFromCard(volume: Volume, path: string, isDir: boolean) {
   if ((await onCard(() => api.deletePath(volume, path, isDir))) === null) return;
-  await reloadCard();
   notify(`${baseName(path)} deleted`, "info");
 }
 
 export async function renameOnCard(volume: Volume, path: string, name: string) {
-  if ((await onCard(() => api.renamePath(volume, path, name))) === null) return;
-  await reloadCard();
+  await onCard(() => api.renamePath(volume, path, name));
 }
 
 export async function createCardFolder(volume: Volume, parent: string, name: string) {
-  if ((await onCard(() => api.createDir(volume, parent, name))) === null) return;
-  await reloadCard();
+  await onCard(() => api.createDir(volume, parent, name));
 }
 
 export async function loadScreens() {
@@ -388,6 +400,7 @@ function replaceScreen(screen: ScreenImage) {
 export async function refresh() {
   try {
     await loadProject();
+    await reloadCard();
   } catch (e) {
     handleError(e);
   }

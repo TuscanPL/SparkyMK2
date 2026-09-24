@@ -22,6 +22,7 @@ import {
   downloadFromCard,
   loadCard,
   notify,
+  reloadCard,
   renameOnCard,
   store,
   uploadToCard,
@@ -39,9 +40,12 @@ const volumes: { id: Volume; label: string; hint: string }[] = [
 ];
 
 onMounted(async () => {
-  if (!store.card) await go("", "card");
-  // Coming back to the tab: fill in whatever of this folder is not cached yet.
-  else preloadWhenSized();
+  if (!store.card) return go("", "card");
+  // Coming back to the tab: other tabs delete, import and export files, so the folder is
+  // read again rather than shown as it was when the tab was left.
+  await reloadCard();
+  // Then fill in whatever of this folder is not cached yet.
+  preloadWhenSized();
 });
 
 onUnmounted(() => {
