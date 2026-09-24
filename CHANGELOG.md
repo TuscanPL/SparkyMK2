@@ -5,6 +5,14 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Changed
+
+- Deleting a folder on the SD card in the Files tab takes everything inside it along,
+  instead of refusing unless it is empty, with a progress bar while it goes. Folders in the
+  device's own storage, which holds the projects, still have to be emptied first. ([#7])
+
+[#7]: https://github.com/TuscanPL/SparkyMK2/issues/7
+
 ## [0.5.0] - 2026-09-21
 
 ### Added

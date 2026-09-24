@@ -212,7 +212,11 @@ async function onDelete() {
   const answer = await ask(
     `Delete this ${what}?`,
     `${entry.path} is removed from ${volume.value === "card" ? "the SD card" : "the device"}. ${
-      entry.isDir ? "Only empty folders can go." : "This cannot be undone."
+      !entry.isDir
+        ? "This cannot be undone."
+        : volume.value === "card"
+          ? "Everything inside it is deleted too. This cannot be undone."
+          : "Only empty folders can go."
     }${warning}`,
     [
       { label: "Cancel", value: "cancel" },

@@ -211,20 +211,51 @@ pub async fn download_folder(
     .await
 }
 
-/// Delete a file, or an empty directory.
+/// Delete a file or a directory. On the card a directory goes with everything in it; on
+/// the device's own storage, which holds the projects, only an empty one can go.
 #[tauri::command]
 pub async fn delete_path(
+    app: AppHandle,
     state: State<'_, AppState>,
     volume: String,
     path: String,
     is_dir: bool,
 ) -> CmdResult<()> {
     with_device(&state, move |dev| {
-        let target = qualify(&volume, &path)?;
-        if is_dir {
-            dev.rmdir(&target)?;
+        if path.trim_matches(['/', '\\']).is_empty() {
+            return Err(Failure::Other("the root of a volume cannot be deleted".into()));
+        }
+        if !is_dir {
+            dev.unlink(&qualify(&volume, &path)?)?;
+        } else if volume == "card" {
+            // The device only removes empty directories, so the files go first, then the
+            // directories deepest first. Listing is quick but each unlink searches its
+            // whole directory, so a big folder takes a while: the files are counted first
+            // to show how far along it is.
+            let mut dirs = Vec::new();
+            let mut files = Vec::new();
+            let mut stack = vec![path.clone()];
+            while let Some(dir) = stack.pop() {
+                for e in dev.list_dir(&qualify(&volume, &dir)?)? {
+                    let child = join(&dir, &e.name);
+                    if e.is_dir() {
+                        stack.push(child);
+                    } else {
+                        files.push(child);
+                    }
+                }
+                dirs.push(dir);
+            }
+            let total = files.len() as u64;
+            for (i, file) in files.iter().enumerate() {
+                emit(&app, &file_name(file), i as u64, total);
+                dev.unlink(&qualify(&volume, file)?)?;
+            }
+            for dir in dirs.iter().rev() {
+                dev.rmdir(&qualify(&volume, dir)?)?;
+            }
         } else {
-            dev.unlink(&target)?;
+            dev.rmdir(&qualify(&volume, &path)?)?;
         }
         Ok(())
     })
