@@ -31,8 +31,8 @@ pub struct Entry {
     /// Path within the volume.
     path: String,
     is_dir: bool,
-    /// Bytes; 0 for directories.
-    size: u64,
+    /// Bytes, or `None` until [`file_sizes`] is asked; always `None` for directories.
+    size: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -81,21 +81,17 @@ pub async fn list_volume(
     with_device(&state, move |dev| {
         let base = qualify(&volume, &path)?;
         let mut entries = Vec::new();
+        // The listing carries no sizes, and a stat per file takes seconds in a folder of
+        // hundreds (each one searches the whole directory), so sizes come separately.
         for e in dev.list_dir(&base)? {
-            let child = join(&path, &e.name);
-            let is_dir = e.is_dir();
-            // The listing carries no size, so ask for each file's.
-            let size = if is_dir {
-                0
-            } else {
-                dev.stat(&qualify(&volume, &child)?)?
-                    .map_or(0, |s| u64::from(s.size))
-            };
+            if is_mac_metadata(&e.name) {
+                continue;
+            }
             entries.push(Entry {
+                path: join(&path, &e.name),
+                is_dir: e.is_dir(),
                 name: e.name,
-                path: child,
-                is_dir,
-                size,
+                size: None,
             });
         }
         entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.cmp(&b.name)));
@@ -112,6 +108,29 @@ pub async fn list_volume(
         })
     })
     .await
+}
+
+/// Sizes of files in bytes, in the order asked; `None` for one that has gone.
+#[tauri::command]
+pub async fn file_sizes(
+    state: State<'_, AppState>,
+    volume: String,
+    paths: Vec<String>,
+) -> CmdResult<Vec<Option<u64>>> {
+    with_device(&state, move |dev| {
+        paths
+            .iter()
+            .map(|p| Ok(dev.stat(&qualify(&volume, p)?)?.map(|s| u64::from(s.size))))
+            .collect()
+    })
+    .await
+}
+
+/// What a Mac leaves on any card it touches: an AppleDouble `._name` beside each file,
+/// and folders for Spotlight, the Trash and file events. None of it is audio.
+fn is_mac_metadata(name: &str) -> bool {
+    name.starts_with("._")
+        || matches!(name, ".DS_Store" | ".Spotlight-V100" | ".Trashes" | ".fseventsd")
 }
 
 fn emit(app: &AppHandle, name: &str, done: u64, total: u64) {
@@ -192,6 +211,9 @@ pub async fn download_folder(
             std::fs::create_dir_all(&target)
                 .map_err(|e| Failure::Other(format!("creating {}: {e}", target.display())))?;
             for e in dev.list_dir(&qualify(&volume, &dir)?)? {
+                if is_mac_metadata(&e.name) {
+                    continue;
+                }
                 let child = join(&dir, &e.name);
                 if e.is_dir() {
                     stack.push((child, target.join(&e.name)));

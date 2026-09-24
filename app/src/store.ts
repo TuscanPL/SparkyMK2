@@ -3,6 +3,7 @@ import { reactive } from "vue";
 import {
   api,
   errorText,
+  type CardEntry,
   type CardListing,
   type Volume,
   type Pad,
@@ -48,6 +49,8 @@ export const store = reactive({
   scanning: false,
   connecting: false,
   connected: false,
+  /** The cable came out while connected: connect again once the device is back. */
+  reconnect: false,
   status: null as Status | null,
   projects: [] as string[],
   pads: [] as Pad[],
@@ -129,14 +132,15 @@ async function confirmAction(title: string, message: string, action: string): Pr
   return answer === "ok";
 }
 
-export async function scanPorts() {
-  store.scanning = true;
+/** `quiet` is for the connect screen's own rescans: no spinner, no error toasts. */
+export async function scanPorts(quiet = false) {
+  if (!quiet) store.scanning = true;
   try {
     store.ports = await api.listPorts();
   } catch (e) {
-    notify(errorText(e));
+    if (!quiet) notify(errorText(e));
   } finally {
-    store.scanning = false;
+    if (!quiet) store.scanning = false;
   }
 }
 
@@ -145,6 +149,7 @@ export async function connect(port: string | null) {
   try {
     await api.connect(port);
     store.connected = true;
+    store.reconnect = false;
     await loadProject();
     schedulePoll();
   } catch (e) {
@@ -173,6 +178,7 @@ export async function resume() {
 }
 
 export async function disconnect() {
+  store.reconnect = false;
   window.clearTimeout(pollTimer);
   await api.disconnect().catch(() => {});
   resetDevice();
@@ -228,10 +234,42 @@ export async function loadPatterns() {
   }
 }
 
+/** Sizes are asked a few files at a time, so a click waits behind one batch at most. */
+const SIZE_BATCH = 25;
+
+/**
+ * Fill in the sizes a listing leaves out. A stat per file is slow in a folder of hundreds,
+ * so the names show first and the sizes follow, a batch at a time, until `current` turns
+ * false because another folder opened. Sizes are only for show, so a failure just stops.
+ */
+export async function fillSizes(volume: Volume, entries: CardEntry[], current: () => boolean) {
+  const files = entries.filter((e) => !e.isDir && e.size === null);
+  for (let i = 0; i < files.length && current(); i += SIZE_BATCH) {
+    const batch = files.slice(i, i + SIZE_BATCH);
+    let sizes: (number | null)[];
+    try {
+      sizes = await api.fileSizes(volume, batch.map((e) => e.path));
+    } catch {
+      return;
+    }
+    if (!current()) return;
+    batch.forEach((e, j) => (e.size = sizes[j] ?? 0));
+  }
+}
+
+let cardSizes: Promise<void> = Promise.resolve();
+
+/** Settles once the folder showing in the Files tab has all its sizes. */
+export function cardSized(): Promise<void> {
+  return cardSizes;
+}
+
 export async function loadCard(volume: Volume, path: string) {
   store.cardLoading = true;
   try {
     store.card = await api.listVolume(volume, path);
+    const listing = store.card;
+    cardSizes = fillSizes(volume, listing.entries, () => store.card === listing);
   } catch (e) {
     handleError(e);
   } finally {
@@ -419,7 +457,12 @@ export function handleError(e: unknown) {
   console.error(text);
   if (text.includes("connection to the SP-404MKII was lost") || text === "not connected") {
     window.clearTimeout(pollTimer);
+    // Only the first failure says so; the actions queued behind it would each say it again.
+    if (!store.connected) return;
     resetDevice();
+    store.reconnect = true;
+    notify(`${text}. SparkyMK2 connects again once it is plugged back in.`);
+    return;
   }
   notify(text);
 }

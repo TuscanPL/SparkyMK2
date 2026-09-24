@@ -16,6 +16,7 @@ import {
 } from "../preview";
 import {
   ask,
+  cardSized,
   createCardFolder,
   deleteFromCard,
   downloadFromCard,
@@ -40,7 +41,7 @@ const volumes: { id: Volume; label: string; hint: string }[] = [
 onMounted(async () => {
   if (!store.card) await go("", "card");
   // Coming back to the tab: fill in whatever of this folder is not cached yet.
-  else if (store.prefs.preloadFolders) preloadFolder(store.card.volume, store.card.entries);
+  else preloadWhenSized();
 });
 
 onUnmounted(() => {
@@ -81,7 +82,15 @@ async function go(to: string, to_volume: Volume = volume.value, select?: string)
     selected.value = entries.value.find((e) => e.name === select) ?? null;
     nextTick(() => reveal(cursor.value));
   }
-  if (store.prefs.preloadFolders && store.card) preloadFolder(store.card.volume, store.card.entries);
+  preloadWhenSized();
+}
+
+/** Preload the folder once its sizes are in, since the cache keys sounds by size. */
+async function preloadWhenSized() {
+  const listing = store.card;
+  if (!store.prefs.preloadFolders || !listing) return;
+  await cardSized();
+  if (store.card === listing) preloadFolder(listing.volume, listing.entries);
 }
 
 function up() {
@@ -319,7 +328,7 @@ const percent = computed(() => {
           @blur="commitRename(entry)"
         />
         <span v-else class="name">{{ entry.name }}</span>
-        <span class="size mono muted">{{ entry.isDir ? "" : formatBytes(entry.size) }}</span>
+        <span class="size mono muted">{{ entry.size === null ? "" : formatBytes(entry.size) }}</span>
       </div>
       <p v-if="store.card && !store.card.entries.length && !store.cardLoading" class="empty muted">
         This folder is empty.

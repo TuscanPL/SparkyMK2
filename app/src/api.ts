@@ -122,8 +122,8 @@ export interface CardEntry {
   /** Path within the volume. */
   path: string;
   isDir: boolean;
-  /** Bytes; 0 for directories. */
-  size: number;
+  /** Bytes, or null until `fillSizes` reaches it; always null for directories. */
+  size: number | null;
 }
 
 export interface CardListing {
@@ -196,11 +196,13 @@ export const api = {
   pads: () => invoke<Pad[]>("pads"),
   padDetail: (pad: number) => invoke<PadDetail>("pad_detail", { pad }),
   waveform: (pad: number, points: number) => invoke<Waveform>("waveform", { pad, points }),
-  preview: (pad: number, ms: number) => invoke<void>("preview_pad", { pad, ms }),
+  previewStart: (pad: number) => invoke<void>("preview_start", { pad }),
+  previewStop: (pad: number) => invoke<void>("preview_stop", { pad }),
   patterns: () => invoke<boolean[]>("patterns"),
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
   screens: () => invoke<ScreenImages>("screens"),
   listVolume: (volume: Volume, path: string) => invoke<CardListing>("list_volume", { volume, path }),
+  fileSizes: (volume: Volume, paths: string[]) => invoke<(number | null)[]>("file_sizes", { volume, paths }),
   previewAudio: (volume: Volume, path: string) => invoke<ArrayBuffer>("preview_audio", { volume, path }),
   exportPads: (pads: number[], target: Place, folder: string, sidecar: boolean) =>
     invoke<ExportSummary>("export_pads", { pads, target, folder, sidecar }),

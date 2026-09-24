@@ -19,7 +19,7 @@ import {
   preview,
   stopPreview,
 } from "../preview";
-import { notify, store } from "../store";
+import { fillSizes, notify, store } from "../store";
 import { restoreExport } from "../exporting";
 
 const path = ref("");
@@ -42,7 +42,12 @@ async function go(to: string, select?: string) {
     entries.value = listing.entries.filter((e) => e.isDir || playable(e.name));
     cursor.value = select ? entries.value.findIndex((e) => e.name === select) : -1;
     if (cursor.value >= 0) nextTick(() => reveal(cursor.value));
-    if (store.prefs.preloadFolders) preloadFolder("card", entries.value);
+    const shown = entries.value;
+    const current = () => entries.value === shown;
+    // The cache keys sounds by size, so preloading waits for them.
+    fillSizes("card", shown, current).then(() => {
+      if (store.prefs.preloadFolders && current()) preloadFolder("card", shown);
+    });
   } catch (e) {
     notify(errorText(e));
   } finally {

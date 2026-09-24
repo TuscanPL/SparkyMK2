@@ -70,6 +70,9 @@ pub struct PortInfo {
 pub fn find_ports() -> Result<Vec<PortInfo>> {
     Ok(serialport::available_ports()?
         .into_iter()
+        // macOS lists each device twice, as a callout `cu.*` and a dial-in `tty.*`. The
+        // dial-in one waits for a carrier the device never raises; `cu.*` is the one to use.
+        .filter(|p| !(cfg!(target_os = "macos") && p.port_name.starts_with("/dev/tty.")))
         .filter_map(|p| match p.port_type {
             SerialPortType::UsbPort(usb) if usb.vid == USB_VID && usb.pid == USB_PID => {
                 Some(PortInfo {
@@ -154,8 +157,18 @@ impl Device {
         let mut port = self.writer.lock().unwrap();
         // No flush: writes to the serial handle are already synchronous, and on Windows a
         // flush waits for the driver to drain, adding ~120 ms per message.
-        port.write_all(&bytes)?;
-        Ok(())
+        match port.write_all(&bytes) {
+            Ok(()) => Ok(()),
+            Err(e) if matches!(e.kind(), ErrorKind::TimedOut | ErrorKind::Interrupted) => {
+                Err(e.into())
+            }
+            // Anything else (a broken pipe once the cable is out, on macOS and Linux alike)
+            // means the port is gone, and saying so lets the app drop it and reconnect.
+            Err(e) => {
+                log::warn!("serial write failed: {e}");
+                Err(Error::Closed)
+            }
+        }
     }
 
     /// Send `msg`, then return the first incoming message accepted by `matches`.

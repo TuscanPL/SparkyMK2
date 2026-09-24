@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import BankStrip from "../components/BankStrip.vue";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
@@ -46,7 +46,11 @@ const index = computed(() => store.selectedPad);
 const blocked = computed(() => editBlock(index.value));
 const busy = computed(() => (index.value !== null ? store.working[index.value] : undefined));
 const locked = computed(() => !!blocked.value || !!busy.value);
-const previewing = ref(false);
+/** Pad the device is playing for Preview, or null. */
+const previewing = ref<number | null>(null);
+/** Frame the preview has reached, for the waveform's playhead. */
+const playhead = ref<number | null>(null);
+let playheadFrame = 0;
 const wave = ref<InstanceType<typeof WaveformView> | null>(null);
 
 const groups = computed(() => {
@@ -59,19 +63,55 @@ const groups = computed(() => {
 
 const vinylOn = computed(() => !!detail.value?.params.find((p) => p.name === "vinyl")?.value);
 
+/** Longest a preview runs by itself; a looping pad would otherwise play until Stop. */
+const PREVIEW_MAX_MS = 60_000;
+
+/** Play the pad on the device from start to end, or stop it if it is playing. */
 async function preview() {
+  if (previewing.value !== null) return stopPreview();
   const d = detail.value;
   if (!d?.sample) return;
-  const ms = Math.min(4000, Math.max(300, ((d.sample.end - d.sample.start) / 48000) * 1000));
-  previewing.value = true;
+  const { start, end } = d.sample;
+  // The playhead runs at 48 kHz from the start point; pitch and speed are not followed.
+  const ms = Math.min(PREVIEW_MAX_MS, Math.max(300, (end - start) / 48));
+  previewing.value = d.index;
   try {
-    await api.preview(d.index, Math.round(ms));
+    await api.previewStart(d.index);
+  } catch (e) {
+    previewing.value = null;
+    handleError(e);
+    return;
+  }
+  const began = performance.now();
+  const tick = () => {
+    if (previewing.value !== d.index) return;
+    const elapsed = performance.now() - began;
+    if (elapsed >= ms) {
+      stopPreview();
+      return;
+    }
+    playhead.value = Math.min(end, start + elapsed * 48);
+    playheadFrame = requestAnimationFrame(tick);
+  };
+  playheadFrame = requestAnimationFrame(tick);
+}
+
+async function stopPreview() {
+  const pad = previewing.value;
+  if (pad === null) return;
+  previewing.value = null;
+  playhead.value = null;
+  cancelAnimationFrame(playheadFrame);
+  try {
+    await api.previewStop(pad);
   } catch (e) {
     handleError(e);
-  } finally {
-    previewing.value = false;
   }
 }
+
+// Picking another pad or leaving the tab ends the preview, as letting go of a pad would.
+watch(index, stopPreview);
+onUnmounted(stopPreview);
 
 async function commitParam(name: string, value: number) {
   if (index.value !== null) await setPadParam(index.value, name, value);
@@ -195,8 +235,9 @@ async function commitChops(points: number[]) {
             </div>
             <span v-if="store.detailLoading || busy" class="status muted"><span class="spinner" />{{ busy }}</span>
             <div v-if="detail?.sample" class="actions">
-              <button :disabled="previewing" title="Play the pad on the device" @click="preview">
-                <Icon name="play" :size="14" /> {{ previewing ? "Playing…" : "Preview" }}
+              <button :title="previewing === null ? 'Play the pad on the device' : 'Stop the pad'" @click="preview">
+                <Icon :name="previewing === null ? 'play' : 'stop'" :size="14" />
+                {{ previewing === null ? "Preview" : "Stop" }}
               </button>
               <button :disabled="locked" @click="padOperation(detail.index, 'truncate')">Truncate</button>
               <button :disabled="locked" @click="padOperation(detail.index, 'normalize')">Normalize</button>
@@ -216,6 +257,7 @@ async function commitChops(points: number[]) {
               :sample="detail.sample"
               :loading="store.waveLoading"
               :editable="!locked"
+              :playhead="playhead"
               @point="commitPoint"
               @chops="commitChops"
             />

@@ -116,6 +116,14 @@ export function clickAfterDrag(): boolean {
   return justDragged;
 }
 
+/**
+ * What divides a file drop's position to give CSS pixels. Positions are typed as physical
+ * pixels, and are on Linux and Windows, but macOS hands them over already logical;
+ * dividing there sent a drop on a Retina screen to the pad at half its coordinates.
+ */
+const logicalDrops = navigator.userAgent.includes("Mac OS X");
+const dropScale = () => (logicalDrops ? 1 : window.devicePixelRatio);
+
 /** Listen for files dragged in from outside the window. */
 export async function listenForFileDrops() {
   await getCurrentWebview().onDragDropEvent((event) => {
@@ -134,9 +142,8 @@ export async function listenForFileDrops() {
       endHover();
       return;
     }
-    // Positions arrive in physical pixels.
-    const x = p.position.x / window.devicePixelRatio;
-    const y = p.position.y / window.devicePixelRatio;
+    const x = p.position.x / dropScale();
+    const y = p.position.y / dropScale();
     if (p.type === "enter" || p.type === "over") {
       drag.files = true;
       track(x, y);

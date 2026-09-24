@@ -7,10 +7,29 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Changed
 
+- Preview on the Samples tab plays the pad from its start to its end rather than for at
+  most four seconds, turns into a Stop button while it plays, and runs a playhead across
+  the waveform. ([#5])
+- Big folders open at once: the names show first and the file sizes follow in the
+  background. An 832-file folder used to look like it never finished listing, because each
+  size is asked for separately and every ask searches the whole folder. ([#5])
 - Deleting a folder on the SD card in the Files tab takes everything inside it along,
   instead of refusing unless it is empty, with a progress bar while it goes. Folders in the
   device's own storage, which holds the projects, still have to be emptied first. ([#7])
 
+### Fixed
+
+- Unplugging the device while connected goes back to the connect screen with one message,
+  instead of a *Broken pipe* toast for each action and a restart to recover, and the app
+  connects again by itself once the device is plugged back in. ([#5])
+- Files dropped on a pad from Finder on a Retina screen land on that pad; the drop
+  position was halved, sending pad 11 to pad 2. ([#5])
+- The Mac's own files on a card (`._*` twins, `.DS_Store`, `.Spotlight-V100`, `.Trashes`,
+  `.fseventsd`) no longer show in the Files tab or the Import browser, and are left out of
+  folders saved to the computer. ([#5])
+- On macOS the device is listed once, on its `cu.*` port, rather than twice. ([#5])
+
+[#5]: https://github.com/TuscanPL/SparkyMK2/issues/5
 [#7]: https://github.com/TuscanPL/SparkyMK2/issues/7
 
 ## [0.5.0] - 2026-09-21

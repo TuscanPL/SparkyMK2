@@ -9,6 +9,8 @@ const props = defineProps<{
   sample: SampleInfo | null;
   loading: boolean;
   editable: boolean;
+  /** Frame a preview has reached, or null when nothing is playing. */
+  playhead?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -118,6 +120,7 @@ function draw() {
   line(toX(m.loopTop), css("--teal"), "L", true, 1);
   line(start, css("--accent"), "S");
   line(end, css("--accent"), "E");
+  if (props.playhead != null) line(toX(props.playhead), css("--text"), "");
 }
 
 /** Frame under a pointer position. */
@@ -246,6 +249,7 @@ watch(
   },
 );
 watch(() => props.waveform, draw);
+watch(() => props.playhead, draw);
 </script>
 
 <template>

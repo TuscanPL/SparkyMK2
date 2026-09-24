@@ -142,6 +142,13 @@ impl Device {
 
     /// Play a pad for `duration`, like holding the app's Preview button.
     pub fn preview(&self, pad: PadIndex, duration: Duration) -> Result<()> {
+        self.preview_start(pad)?;
+        std::thread::sleep(duration);
+        self.preview_stop(pad)
+    }
+
+    /// Start playing a pad, as holding the pad down would; it plays until [`Device::preview_stop`].
+    pub fn preview_start(&self, pad: PadIndex) -> Result<()> {
         let id = pad.index().to_le_bytes();
         let started = self.control_call(short(&control::preview_start(pad)), "preview", |p| {
             p.len() >= 4 && p[0] == reply::PREVIEW_START && p[1..3] == id
@@ -149,7 +156,12 @@ impl Device {
         if started[3] != 0 {
             return Err(refused("preview", started[3]));
         }
-        std::thread::sleep(duration);
+        Ok(())
+    }
+
+    /// Stop a pad started with [`Device::preview_start`].
+    pub fn preview_stop(&self, pad: PadIndex) -> Result<()> {
+        let id = pad.index().to_le_bytes();
         self.control_call(short(&control::preview_stop(pad)), "stop preview", |p| {
             p.len() >= 4 && p[0] == reply::PREVIEW_STOP && p[1..3] == id
         })?;

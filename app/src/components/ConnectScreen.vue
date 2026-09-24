@@ -1,9 +1,36 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import Icon from "./Icon.vue";
 import { connect, scanPorts, store } from "../store";
 
-onMounted(scanPorts);
+/** How often the list is looked at again, so a device plugged in turns up by itself. */
+const RESCAN_MS = 2000;
+/** A device just plugged in needs a moment before it answers. */
+const SETTLE_MS = 1000;
+
+let timer: number | undefined;
+let hadPorts = false;
+
+async function rescan() {
+  await scanPorts(true);
+  const appeared = store.ports.length > 0 && !hadPorts;
+  hadPorts = store.ports.length > 0;
+  // Back after the cable came out: pick up where it left off, once per plug-in.
+  if (appeared && store.reconnect && store.ports.length === 1 && !store.connecting) {
+    await new Promise((r) => window.setTimeout(r, SETTLE_MS));
+    if (store.reconnect && !store.connected) await connect(store.ports[0].name);
+  }
+  timer = window.setTimeout(rescan, RESCAN_MS);
+}
+
+onMounted(async () => {
+  await scanPorts();
+  // A port still listed straight after the cable came out is on its way out, so only a
+  // port that shows up after this counts as the device coming back.
+  hadPorts = store.ports.length > 0;
+  timer = window.setTimeout(rescan, RESCAN_MS);
+});
+onUnmounted(() => window.clearTimeout(timer));
 </script>
 
 <template>
@@ -29,7 +56,7 @@ onMounted(scanPorts);
         </div>
       </div>
 
-      <button :disabled="store.scanning" @click="scanPorts">
+      <button :disabled="store.scanning" @click="scanPorts()">
         <span v-if="store.scanning" class="spinner" />
         <Icon v-else name="refresh" />
         Scan again

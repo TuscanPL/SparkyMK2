@@ -1,7 +1,6 @@
 //! Commands the frontend invokes. Errors reach it as display strings.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde::Serialize;
 use sp404_device::{Device, find_ports};
@@ -398,14 +397,16 @@ fn peaks(sample: &Sample, points: usize) -> WaveformDto {
     }
 }
 
-/// Play a pad on the device for `ms` milliseconds.
+/// Start playing a pad on the device; it plays until [`preview_stop`].
 #[tauri::command]
-pub async fn preview_pad(state: State<'_, AppState>, pad: u16, ms: u64) -> CmdResult<()> {
-    with_device(&state, move |dev| {
-        let pad = pad_index(pad)?;
-        Ok(dev.preview(pad, Duration::from_millis(ms.min(10_000)))?)
-    })
-    .await
+pub async fn preview_start(state: State<'_, AppState>, pad: u16) -> CmdResult<()> {
+    with_device(&state, move |dev| Ok(dev.preview_start(pad_index(pad)?)?)).await
+}
+
+/// Stop a pad started with [`preview_start`].
+#[tauri::command]
+pub async fn preview_stop(state: State<'_, AppState>, pad: u16) -> CmdResult<()> {
+    with_device(&state, move |dev| Ok(dev.preview_stop(pad_index(pad)?)?)).await
 }
 
 /// Whether each of the 160 pattern slots holds a pattern.

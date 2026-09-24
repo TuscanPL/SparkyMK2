@@ -44,8 +44,9 @@ const cache = new Map<string, AudioBuffer>();
 let cacheBytes = 0;
 
 /** By size as well as path, like the waveform cache: a file overwritten in the Files tab
- * almost always changes size, so it is fetched again rather than replayed stale. */
-function keyOf(volume: Volume, path: string, size: number): string {
+ * almost always changes size, so it is fetched again rather than replayed stale. A size
+ * not known yet keys as `null`, so that one is fetched again once its size arrives. */
+function keyOf(volume: Volume, path: string, size: number | null): string {
   return `${volume}:${path}:${size}`;
 }
 
@@ -109,7 +110,7 @@ function start(buffer: AudioBuffer, path: string, mine: number) {
 }
 
 /** Fetch a sound from the device and play it; clicking the one already playing stops it. */
-export async function playPreview(volume: Volume, path: string, size = 0) {
+export async function playPreview(volume: Volume, path: string, size: number | null = null) {
   if (preview.playing === path || preview.loading === path) {
     stopPreview();
     return;
@@ -145,7 +146,7 @@ export async function playPreview(volume: Volume, path: string, size = 0) {
  * Play a sound reached by keyboard. The previous one stops at once; a sound already heard
  * plays straight away, anything else waits for the keys to settle before it is fetched.
  */
-export function auditionPreview(volume: Volume, path: string, size = 0) {
+export function auditionPreview(volume: Volume, path: string, size: number | null = null) {
   stopPreview();
   if (cache.has(keyOf(volume, path, size))) {
     playPreview(volume, path, size);
