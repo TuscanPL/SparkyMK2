@@ -288,8 +288,39 @@ impl Device {
         .map(drop)
     }
 
-    /// `project` is 0-based.
+    /// Rename `project` (0-based), which must be the current project.
+    ///
+    /// The device renames whichever project is current and ignores the number it is sent,
+    /// so renaming another one would rename the current one instead. It also keeps the
+    /// name only in the project's `PADCONF.BIN`: an empty slot has none, and one written
+    /// by older firmware has no room for a name, so a rename there is accepted and then
+    /// lost when another project is selected. Both are refused with the reason.
     pub fn set_project_name(&self, project: u8, name: &str) -> Result<()> {
+        let number = project + 1;
+        let current = self.current_project()?;
+        if current != project {
+            return Err(Error::Unsupported(format!(
+                "project {number} is not the current project (project {} is); select it first",
+                current + 1
+            )));
+        }
+        let padconf = format!("ROLAND/SP-404MKII/PROJECT_{number:02}/PADCONF.BIN");
+        if self.stat(&padconf)?.is_none() {
+            return Err(Error::Unsupported(format!(
+                "project {number} is empty, and the SP-404MKII only keeps a name for a project \
+                 with something saved in it; add a sample first, then rename it"
+            )));
+        }
+        let handle = self.open_file(&padconf, sp404_proto::fileapi::flags::READ_ONLY)?;
+        let header = self.read(handle, 12);
+        self.close_file(handle)?;
+        // Byte 8 is the file's version; names arrived with version 3.
+        if header?.get(8).is_some_and(|&version| version < 3) {
+            return Err(Error::Unsupported(format!(
+                "project {number} was saved by older firmware, and its settings file has no \
+                 room for a name"
+            )));
+        }
         self.control_call(
             long(control::project_name(project, name)),
             "project name",

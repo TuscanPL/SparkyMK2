@@ -150,7 +150,16 @@ success.
 | `8F pad:u16 02` | `0F pad:u16 00` | sent when Edit Chop is switched on **and** off. Chop point writes take effect without it |
 | `95 src:u16 dst:u16 mode:u16` | `15 00`, then `1A proj` | drag a pad onto a pad. `mode` 0 = Overwrite: the destination is replaced and the source becomes empty; this is also a plain move onto an empty pad. 1 = Exchange: the pads swap |
 | `02 pad:u16 name…` (short or long) | echo, padded to 24 characters | set sample name |
-| `35 project:u8 name…` (long) | echo | set project name (0 = project 1) |
+| `35 project:u8 name…` (long) | echo | set project name. **Renames the current project**, whatever `project` says (below) |
+
+**Project names live in `PADCONF.BIN`** (02-files.md), and `35` only ever renames the
+current project: with project 9 current, `35 09 TEN_A` sent for project 10 renamed 9.
+Checked on firmware 5.52 on 2026-09-24, which is how a rename sent for project 9 while
+project 2 was current renamed project 2. A slot that has never held anything has no
+`PADCONF.BIN`: selecting it gives it the name `PROJECT_nn` for as long as it is current,
+and a rename is echoed and shown, but nothing is written, so both are gone once another
+project is selected. A version-2 `PADCONF.BIN` from older firmware has no name field and
+lists as unnamed. SparkyMK2 refuses all three cases rather than send a rename that is lost.
 
 **Device notifications:** `1A proj` (short, `proj` = current project) after Truncate, Normalize, Emphasis, Delete and move.
 When a one-shot preview finishes, the device sends `0E pad 64` / `0F 00 00 64` _(?)_.

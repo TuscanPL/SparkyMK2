@@ -5,6 +5,10 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- Settings shows the app's version, so a bug report can say which one it is about. ([#2])
+
 ### Changed
 
 - Preview on the Samples tab plays the pad from its start to its end rather than for at
@@ -19,6 +23,13 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Fixed
 
+- Project names stick. The SP-404MKII renames whichever project is current, whatever
+  project the rename names, and a name typed in Settings was saved as the project menu
+  closed, so picking the next project quickly could hand it the name meant for the last
+  one. Switching projects now waits for that save. Renaming a project that is not current
+  (as `sp404 rename-project` allowed), an empty slot, or one saved by older firmware is
+  refused with the reason: the device keeps a name only in a project's `PADCONF.BIN`, and
+  those have none, so the name was shown and then lost. ([#2])
 - The Files tab and the Import browser read their folder again whenever saving finishes,
   whether it worked or not, and whenever the Files tab is opened or the top bar's reload
   button is pressed. Files deleted, imported or exported no longer linger in the list until
@@ -33,6 +44,7 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   folders saved to the computer. ([#5])
 - On macOS the device is listed once, on its `cu.*` port, rather than twice. ([#5])
 
+[#2]: https://github.com/TuscanPL/SparkyMK2/issues/2
 [#5]: https://github.com/TuscanPL/SparkyMK2/issues/5
 [#6]: https://github.com/TuscanPL/SparkyMK2/issues/6
 [#7]: https://github.com/TuscanPL/SparkyMK2/issues/7

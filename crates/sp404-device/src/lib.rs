@@ -53,6 +53,9 @@ pub enum Error {
     Unexpected(String),
     #[error("connection closed")]
     Closed,
+    /// Something the device would accept but not keep, explained for whoever asked.
+    #[error("{0}")]
+    Unsupported(String),
     #[error("no SP-404MKII found (USB {USB_VID:04x}:{USB_PID:04x})")]
     NotFound,
 }

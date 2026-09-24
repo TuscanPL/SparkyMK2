@@ -217,7 +217,7 @@ enum Command {
     Normalize { pad: PadIndex },
     /// Rename a pad's sample.
     RenameSample { pad: PadIndex, name: String },
-    /// Rename a project (1-based project number).
+    /// Rename the current project (1-based project number, which must be the current one).
     RenameProject { project: u8, name: String },
     /// Upload a file, replacing it if it exists. Prefix with `SD:` for the SD card.
     Put { local: PathBuf, remote: String },

@@ -406,8 +406,27 @@ export async function refresh() {
   }
 }
 
+/** Settles once nothing is being saved to the device. */
+function whenSaved(): Promise<void> {
+  if (store.pending === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const stop = watch(
+      () => store.pending,
+      (now) => {
+        if (now > 0) return;
+        stop();
+        resolve();
+      },
+    );
+  });
+}
+
 export async function selectProject(project: number) {
   if (store.status?.project === project) return;
+  // The device renames whichever project is current, and a name field saves when it loses
+  // focus, which picking another project in the menu does. Switching first would give the
+  // new project the name typed for the old one, so saves in flight finish first.
+  await whenSaved();
   store.switchingProject = true;
   try {
     await api.selectProject(project);

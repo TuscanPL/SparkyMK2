@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
+import { getVersion } from "@tauri-apps/api/app";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import { PROJECT_NAME_LEN, bpm, storage } from "../format";
 import { renameProject, savePrefs, setGlobalParam, store } from "../store";
+
+/** Shown so a bug report can say which version it is about. */
+const version = ref("");
+getVersion().then((v) => (version.value = v));
 
 const locked = () => store.status?.workingMode === 4;
 
@@ -156,7 +161,7 @@ function commitVolume(letter: string, current: number) {
     <p class="note muted">Changes go to the SP-404MKII as soon as you make them.</p>
 
     <section class="panel app">
-      <div class="label">App</div>
+      <div class="label">App <span v-if="version" class="muted version">SparkyMK2 {{ version }}</span></div>
       <label class="pref">
         <span class="switch">
           <input v-model="store.prefs.preloadFolders" type="checkbox" @change="savePrefs" />
@@ -176,6 +181,12 @@ function commitVolume(letter: string, current: number) {
 </template>
 
 <style scoped>
+.version {
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .settings {
   height: 100%;
   overflow: auto;
