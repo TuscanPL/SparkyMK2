@@ -397,6 +397,36 @@ fn peaks(sample: &Sample, points: usize) -> WaveformDto {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityDto {
+    /// 1-based.
+    project: u8,
+    selected_pad: Option<u16>,
+    /// Frames played of the pad sounding, or `None` when nothing is.
+    position: Option<u32>,
+}
+
+/// What the device is doing, cheap enough to poll several times a second.
+#[tauri::command]
+pub async fn device_activity(state: State<'_, AppState>) -> CmdResult<ActivityDto> {
+    with_device(&state, |dev| {
+        let a = dev.activity()?;
+        Ok(ActivityDto {
+            project: a.project + 1,
+            selected_pad: a.selected.map(PadIndex::index),
+            position: a.position,
+        })
+    })
+    .await
+}
+
+/// Select a pad on the device, so it follows the app as the app follows it.
+#[tauri::command]
+pub async fn select_on_device(state: State<'_, AppState>, pad: u16) -> CmdResult<()> {
+    with_device(&state, move |dev| Ok(dev.select_pad(pad_index(pad)?)?)).await
+}
+
 /// Start playing a pad on the device; it plays until [`preview_stop`].
 #[tauri::command]
 pub async fn preview_start(state: State<'_, AppState>, pad: u16) -> CmdResult<()> {

@@ -173,9 +173,17 @@ Short payloads below are listed without the length byte.
 | Byte | Meaning |
 |---|---|
 | 1 | current project, 0-based (`05` = project 6); confirmed by selecting project 12 (`0B`) |
-| 3 | selected bank |
-| 5 | selected pad |
+| 3 | selected bank; confirmed |
+| 5 | selected pad; confirmed |
+| 8–11 | u32 LE: frames played so far by the pad sounding, `FFFFFFFF` when none is; confirmed |
 | 12 | working mode (`04` while the device showed a settings screen, `00` otherwise) |
+
+Bytes 3, 5 and 8–11 were confirmed on firmware 5.52 on 2026-09-24 by polling every
+100 ms while pads were hit on the unit. Hitting a pad selects it; choosing a bank selects
+its first pad and echoes `01 01 00 ff ff 00 00 00 00` (global `01`, selected pad, = 0).
+The position counts up at about 48,000 per second and restarts when the pad is hit again.
+The device sends nothing of its own when a pad is hit, so following the unit means
+polling. Setting global `00` and `01` selects a pad on the device from the host.
 
 **Pad and pattern index** = bank × 16 + pad, with bank 0 = A and pad 0 = pad 1.
 

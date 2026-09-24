@@ -12,6 +12,8 @@ const props = defineProps<{
   working?: Record<number, string>;
   /** Pads can be dragged and receive drops. */
   droppable?: boolean;
+  /** The pad sounding on the device, lit while it plays. */
+  playing?: number | null;
 }>();
 
 const emit = defineEmits<{ select: [index: number]; press: [event: PointerEvent, index: number] }>();
@@ -33,6 +35,7 @@ function click(index: number) {
           filled: props.filled(padIndex(props.bank, n)),
           selected: props.selected === padIndex(props.bank, n),
           dragging: drag.from === padIndex(props.bank, n),
+          playing: props.playing === padIndex(props.bank, n),
           target:
             props.droppable && drag.over === padIndex(props.bank, n) && drag.from !== padIndex(props.bank, n),
         }"
@@ -98,6 +101,13 @@ function click(index: number) {
 
 .pad:not(.filled).selected {
   box-shadow: 0 0 0 1px var(--tone-line);
+}
+
+.pad.playing {
+  border-color: var(--tone);
+  box-shadow:
+    inset 0 0 0 1px var(--tone),
+    0 0 12px var(--tone-line);
 }
 
 .pad.dragging {

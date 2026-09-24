@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Icon from "./Icon.vue";
 import { BANK_LETTERS, bpm } from "../format";
-import { store } from "../store";
+import { chooseBank, store } from "../store";
 
 const props = defineProps<{
   /** Items in use per bank (samples or patterns). */
@@ -23,7 +23,7 @@ const tempo = (bank: number) => {
       class="bank"
       :data-bank="i"
       :class="{ active: store.bank === i }"
-      @click="store.bank = i"
+      @click="chooseBank(i)"
     >
       <span class="top">
         <span class="letter">{{ letter }}</span>

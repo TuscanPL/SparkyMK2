@@ -67,6 +67,8 @@ export const store = reactive({
   tab: "samples" as Tab,
   bank: 0,
   selectedPad: null as number | null,
+  /** The pad sounding on the device, from a hit on the unit or a preview, or null. */
+  playingPad: null as number | null,
   selectedPattern: null as number | null,
   detail: null as PadDetail | null,
   /** Bumped on every read-back, so controls rebuild from the device's values. */
@@ -91,6 +93,12 @@ export const store = reactive({
 
 let toastId = 0;
 let pollTimer: number | undefined;
+let activityTimer: number | undefined;
+/** The pad last known to be selected on the device, whether it said so or was told. */
+let deviceSelected: number | null = null;
+/** Bumped when the app tells the device which pad is selected; see `followDevice`. */
+let selectionSent = 0;
+let sendingSelection = 0;
 let lastPollError = "";
 let detailRequest = 0;
 /** Waveforms by project, pad and file size. Edits that rewrite audio drop their entry. */
@@ -152,6 +160,7 @@ export async function connect(port: string | null) {
     store.reconnect = false;
     await loadProject();
     schedulePoll();
+    followDevice();
   } catch (e) {
     notify(errorText(e));
     await api.disconnect().catch(() => {});
@@ -172,6 +181,7 @@ export async function resume() {
   try {
     await loadProject();
     schedulePoll();
+    followDevice();
   } catch (e) {
     handleError(e);
   }
@@ -185,6 +195,9 @@ export async function disconnect() {
 }
 
 function resetDevice() {
+  window.clearTimeout(activityTimer);
+  deviceSelected = null;
+  store.playingPad = null;
   store.connected = false;
   store.status = null;
   store.projects = [];
@@ -445,6 +458,7 @@ export async function selectProject(project: number) {
 /** Select a pad and load its details and waveform. */
 export async function selectPad(index: number | null) {
   store.selectedPad = index;
+  if (index !== null && index !== deviceSelected) tellDevice(index);
   const token = ++detailRequest;
   store.detail = null;
   store.waveform = null;
@@ -497,6 +511,63 @@ export function handleError(e: unknown) {
     return;
   }
   notify(text);
+}
+
+/** How often the device is asked what it is doing, to follow pads hit on the unit. */
+const ACTIVITY_MS = 300;
+
+/**
+ * Follow the unit: a pad hit there (or a bank chosen there, which selects its first pad)
+ * is selected here too, with the grid on its bank, and the pad sounding is lit. The device
+ * sends nothing when a pad is hit, but its status poll carries the selected pad and how
+ * far the sounding pad has played, and it is cheap to ask for.
+ */
+async function followDevice() {
+  window.clearTimeout(activityTimer);
+  if (!store.connected) return;
+  const sent = selectionSent;
+  try {
+    const a = await api.deviceActivity();
+    store.playingPad = a.position === null ? null : a.selectedPad;
+    // An answer that crossed a selection the app was sending may show it half done (the
+    // bank set, the pad not yet); acting on it would bounce the selection back.
+    const settled = sendingSelection === 0 && sent === selectionSent;
+    if (
+      settled &&
+      !store.switchingProject &&
+      a.project === store.status?.project &&
+      a.selectedPad !== null &&
+      a.selectedPad !== deviceSelected
+    ) {
+      deviceSelected = a.selectedPad;
+      store.bank = Math.floor(a.selectedPad / 16);
+      if (a.selectedPad !== store.selectedPad) selectPad(a.selectedPad);
+    }
+  } catch {
+    // Connection trouble reaches the user through the regular poll.
+  }
+  if (store.connected) activityTimer = window.setTimeout(followDevice, ACTIVITY_MS);
+}
+
+/** Select a pad on the device too, so the unit follows the app as the app follows it. */
+async function tellDevice(index: number) {
+  deviceSelected = index;
+  selectionSent++;
+  sendingSelection++;
+  try {
+    await api.selectOnDevice(index);
+  } catch {
+    // Only a courtesy to the unit; the app's own selection stands either way.
+  } finally {
+    sendingSelection--;
+  }
+}
+
+/** Choose a bank in the grid. On the Samples tab its first pad is selected with it, as
+ * choosing a bank on the unit does, so the grid and the editor show the same bank. */
+export function chooseBank(bank: number) {
+  store.bank = bank;
+  if (store.tab === "samples" && store.selectedPad !== bank * 16) selectPad(bank * 16);
 }
 
 function schedulePoll() {

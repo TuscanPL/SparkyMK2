@@ -139,6 +139,7 @@ async function commitChops(points: number[]) {
           :selected="store.selectedPad"
           :filled="(i) => !!pad(i)?.hasSample"
           :working="store.working"
+          :playing="store.playingPad"
           droppable
           @select="selectPad"
           @press="pressPad"

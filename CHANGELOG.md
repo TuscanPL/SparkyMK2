@@ -8,6 +8,10 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 ### Added
 
 - Settings shows the app's version, so a bug report can say which one it is about. ([#2])
+- The app follows the unit: hit a pad there and the grid moves to its bank and selects it,
+  and the pad lights while it sounds. It works the other way too: select a pad in the app
+  and the unit selects it, and choosing a bank selects its first pad on both, as the unit
+  does, so the grid and the pad editor always show the same bank. ([#5])
 
 ### Changed
 

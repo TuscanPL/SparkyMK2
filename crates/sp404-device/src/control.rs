@@ -14,6 +14,19 @@ const TIMEOUT: Duration = Duration::from_secs(3);
 const PROJECTS: usize = 16;
 
 /// Summary of the device state from the status poll and project settings.
+/// What the device is doing, from the status poll alone: cheap enough to ask several
+/// times a second, unlike [`Status`], which also reads the project settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Activity {
+    /// Current project, 0-based.
+    pub project: u8,
+    /// The pad selected on the device: hitting a pad selects it, and choosing a bank
+    /// selects its first pad.
+    pub selected: Option<PadIndex>,
+    /// Frames played so far of the pad sounding, or `None` when nothing is.
+    pub position: Option<u32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Status {
     /// Raw `7E` status payload.
@@ -82,6 +95,33 @@ impl Device {
             raw,
             settings,
         })
+    }
+
+    /// The status poll on its own: bytes 1, 3 and 5 are the project, bank and pad, and
+    /// bytes 8 to 11 count the frames a sounding pad has played (all `FF` when none is).
+    pub fn activity(&self) -> Result<Activity> {
+        let raw = self.control_call(short(&control::status_request()), "status", |p| {
+            p.first() == Some(&reply::STATUS)
+        })?;
+        let selected = match (raw.get(3), raw.get(5)) {
+            (Some(&b), Some(&p)) => PadIndex::from_bank_pad(u16::from(b), u16::from(p)),
+            _ => None,
+        };
+        let position = raw
+            .get(8..12)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .filter(|&frames| frames != u32::MAX);
+        Ok(Activity {
+            project: raw.get(1).copied().unwrap_or(0),
+            selected,
+            position,
+        })
+    }
+
+    /// Select a pad on the device, bank first, as the app's pad grid does.
+    pub fn select_pad(&self, pad: PadIndex) -> Result<()> {
+        self.set_param(0x00, Target::Global, i32::from(pad.bank()))?;
+        self.set_param(0x01, Target::Global, i32::from(pad.pad()))
     }
 
     /// Current project, 0-based (status poll byte 1).

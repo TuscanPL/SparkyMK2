@@ -117,6 +117,16 @@ export interface BpmResult {
 export type Volume = "internal" | "card";
 
 /** An entry in a directory on one of the device's volumes. */
+/** What the device is doing, polled several times a second. */
+export interface Activity {
+  /** 1-based. */
+  project: number;
+  /** The pad selected on the device. */
+  selectedPad: number | null;
+  /** Frames played of the pad sounding, or null when nothing is. */
+  position: number | null;
+}
+
 export interface CardEntry {
   name: string;
   /** Path within the volume. */
@@ -196,6 +206,8 @@ export const api = {
   pads: () => invoke<Pad[]>("pads"),
   padDetail: (pad: number) => invoke<PadDetail>("pad_detail", { pad }),
   waveform: (pad: number, points: number) => invoke<Waveform>("waveform", { pad, points }),
+  deviceActivity: () => invoke<Activity>("device_activity"),
+  selectOnDevice: (pad: number) => invoke<void>("select_on_device", { pad }),
   previewStart: (pad: number) => invoke<void>("preview_start", { pad }),
   previewStop: (pad: number) => invoke<void>("preview_stop", { pad }),
   patterns: () => invoke<boolean[]>("patterns"),

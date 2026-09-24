@@ -32,6 +32,8 @@ pub fn run() {
             commands::pads,
             commands::pad_detail,
             commands::waveform,
+            commands::device_activity,
+            commands::select_on_device,
             commands::preview_start,
             commands::preview_stop,
             commands::patterns,
