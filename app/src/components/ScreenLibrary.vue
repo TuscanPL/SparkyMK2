@@ -290,7 +290,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
           <button class="danger" @click="remove">Delete</button>
         </div>
         <p v-if="selected.kind === 'set'" class="muted hint">
-          Share a set by sending its file: whoever gets it adds it with Add files….
+          Share a set by sending its file; whoever gets it adds it with Add files…
         </p>
       </aside>
     </div>

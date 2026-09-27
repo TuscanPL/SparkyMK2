@@ -5,6 +5,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Fixed
+
+- Small layout slips: the Key label in the Samples tab matches the other labels, a
+  one-bar pattern says "1 bar", Clear project's option names stay on one line, and
+  Settings uses the width of a wide window.
+
 ## [0.7.0] - 2026-09-27
 
 ### Added

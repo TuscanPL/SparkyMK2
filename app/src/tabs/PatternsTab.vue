@@ -80,7 +80,7 @@ watch(
           <header class="head">
             <span class="slot-label mono">{{ detail.label }}</span>
             <div class="facts">
-              <div><span class="label">Length</span><span class="mono">{{ bars }} bars</span></div>
+              <div><span class="label">Length</span><span class="mono">{{ bars }} {{ bars === "1" ? "bar" : "bars" }}</span></div>
               <div><span class="label">Time</span><span class="mono">{{ detail.beatsPerBar ?? "?" }}/4</span></div>
               <div><span class="label">Bank tempo</span><span class="mono">{{ bpm(detail.bankTempo) }}</span></div>
               <div><span class="label">Notes</span><span class="mono">{{ detail.notes.length }}</span></div>

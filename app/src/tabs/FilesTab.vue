@@ -35,7 +35,7 @@ const renameText = ref("");
 
 /** The card first: its IMPORT folder is what the device's own IMPORT browser reads. */
 const volumes: { id: Volume; label: string; hint: string }[] = [
-  { id: "card", label: "SD card", hint: "IMPORT, EXPORT and BKUP. Sounds dropped in IMPORT show up in the device's own IMPORT browser." },
+  { id: "card", label: "SD card", hint: "The card's IMPORT, EXPORT and BKUP folders. Sounds put in IMPORT show up in the device's own IMPORT browser." },
   { id: "internal", label: "Device storage", hint: "The device's own memory: projects, samples and the factory library. Changing these can break a project." },
 ];
 

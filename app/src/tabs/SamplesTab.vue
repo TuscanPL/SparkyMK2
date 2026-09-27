@@ -315,7 +315,7 @@ async function commitChops(points: number[]) {
                       @commit="commitParam(p.name, $event)"
                     />
                     <div v-if="p.name === 'pitch-fine'" class="key-field">
-                      <span class="name">Key</span>
+                      <span class="key-label">Key</span>
                       <span class="key-value">
                         <span v-if="keyText" class="mono">{{ keyText }}</span>
                         <span v-else class="muted">Not detected</span>
@@ -601,7 +601,7 @@ label.row:first-of-type {
   min-height: 30px;
 }
 
-.key-field .name {
+.key-label {
   color: var(--muted);
 }
 

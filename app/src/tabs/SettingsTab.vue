@@ -317,14 +317,17 @@ function commitVolume(letter: string, current: number) {
   margin: 10px 0;
 }
 
+/* Each option's name stays on one line; its note wraps beside it. */
 .clear .parts label {
   display: flex;
   gap: 8px;
   align-items: baseline;
+  white-space: nowrap;
 }
 
 .clear .parts .muted {
   font-size: 12px;
+  white-space: normal;
 }
 
 .clear .confirm {
@@ -347,11 +350,12 @@ function commitVolume(letter: string, current: number) {
   overflow: auto;
   padding: 14px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Two columns, or three on a wide window; Banks and App span them all. */
+  grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
   grid-auto-rows: min-content;
   gap: 14px;
   align-content: start;
-  max-width: 980px;
+  max-width: 1480px;
 }
 
 .card,
