@@ -5,6 +5,11 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Fixed
+
+- Disconnecting, switching to another port or quitting the app sends MKII EXIT, so the
+  SP-404MKII leaves its remote screen instead of staying on it with nothing connected.
+
 ## [0.6.0] - 2026-09-24
 
 ### Added

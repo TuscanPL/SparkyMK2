@@ -9,12 +9,25 @@ mod screens;
 use std::sync::{Arc, Mutex};
 
 use sp404_device::Device;
+use tauri::Manager;
 
 /// The open device, if any. Device calls are blocking and run on Tauri's blocking pool;
 /// the device serializes concurrent requests itself.
 #[derive(Default)]
 pub struct AppState {
     device: Mutex<Option<Arc<Device>>>,
+}
+
+impl AppState {
+    /// Let go of the device, sending MKII EXIT first so it leaves its remote screen rather
+    /// than staying on it after the app is gone. Blocks until any request in flight is done.
+    fn close(&self) {
+        let device = self.device.lock().unwrap().take();
+        if let Some(device) = device {
+            // The port may already be gone (unplugged); closing it is all that is left then.
+            let _ = device.mkii_exit();
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -65,6 +78,11 @@ pub fn run() {
             export::read_export,
             export::restore_pads,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running SparkyMK2");
+        .build(tauri::generate_context!())
+        .expect("error while building SparkyMK2")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<AppState>().close();
+            }
+        });
 }

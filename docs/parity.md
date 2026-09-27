@@ -14,7 +14,7 @@ where SparkyMK2 stands on each.
 | Find the device's serial port by USB description | ✅ | ✅ one entry per device on macOS (`cu.*`) |
 | Connect / Disconnect | ✅ | ✅ |
 | Lost connection | ✅ a failed write means the port is gone | ✅ back to the connect screen with one message, and it connects again when the device is plugged back in |
-| MKII EXIT (leave remote mode on the device) | ✅ `3A` | CLI: `mkii-exit`; the app does not send it on disconnect |
+| MKII EXIT (leave remote mode on the device) | ✅ `3A` | ✅ sent on disconnect, when switching ports and when the app quits |
 | Firmware check (requires 4.xx or later) | 🟡 | ❌ |
 | Working-mode display (Deejay / Chromatic / 16 Velocities / Edit / Disabled) | 🟡 status byte 12; only 4 (a menu is open) is known | 🟡 a banner and locked editing while a menu is open; the other modes are not named |
 | Device errors → messages | ✅ `32 code`, message = table[code + 130] | ✅ |

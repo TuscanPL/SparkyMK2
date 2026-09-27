@@ -9,7 +9,7 @@ use sp404_formats::{Pattern, Sample, smp};
 use sp404_proto::PadIndex;
 use sp404_proto::pad::PadBlock;
 use sp404_proto::params::{self, Scope};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::AppState;
 
@@ -103,9 +103,9 @@ pub async fn list_ports() -> CmdResult<Vec<PortDto>> {
 /// Open `port`, or the first SP-404MKII found. Returns the port name. An existing
 /// connection is closed first, since the port can only be opened once.
 #[tauri::command]
-pub async fn connect(state: State<'_, AppState>, port: Option<String>) -> CmdResult<String> {
-    let previous = state.device.lock().unwrap().take();
-    drop(previous);
+pub async fn connect(app: AppHandle, port: Option<String>) -> CmdResult<String> {
+    close(app.clone()).await?;
+    let state = app.state::<AppState>();
     let device = tauri::async_runtime::spawn_blocking(move || match port {
         Some(p) => Device::open(&p),
         None => Device::open_first(),
@@ -129,8 +129,15 @@ pub async fn connect(state: State<'_, AppState>, port: Option<String>) -> CmdRes
 }
 
 #[tauri::command]
-pub fn disconnect(state: State<'_, AppState>) {
-    state.device.lock().unwrap().take();
+pub async fn disconnect(app: AppHandle) -> CmdResult<()> {
+    close(app).await
+}
+
+/// Close the device off the main thread, since MKII EXIT waits for any request in flight.
+async fn close(app: AppHandle) -> CmdResult<()> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().close())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
