@@ -5,13 +5,20 @@
 //! Restoring reads the sidecar and puts each sound back on its own pad with its settings,
 //! so a bank with gaps comes back with the same gaps. Exports go to the SD card or to a
 //! folder on the computer.
+//!
+//! Patterns export the three ways the official app offers: a Standard MIDI File, a Bounce
+//! (one WAV of the whole pattern) or MULTIPAD (one WAV per pad it plays). The device
+//! renders the WAVs itself, in real time.
+//!
+//! A project backup is a copy of its whole folder, the same files the official app's
+//! export holds, and restores into the current project.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sp404_device::Device;
-use sp404_formats::{Sample, audio, wav};
+use sp404_formats::{Pattern, Sample, audio, smf, wav};
 use sp404_proto::PadIndex;
 use sp404_proto::params::{self, Scope, Target};
 use tauri::{AppHandle, Emitter, State};
@@ -430,4 +437,267 @@ mod tests {
         assert!(parse_sidecar(br#"{"format":"x","version":1,"project":"","pads":[]}"#).is_err());
         assert!(parse_sidecar(b"not json").is_err());
     }
+}
+
+/// A file name without the characters Windows, macOS or the card refuse.
+fn file_safe(name: &str) -> String {
+    name.chars()
+        .map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// Export the pattern in `slot` of the current project into `folder` (`target` is `card`
+/// or `local`). `format` is `smf` or `bounce`, written as `{name}.mid` or `{name}.wav`,
+/// or `multipad`, one WAV per pad the pattern plays, named after the pad. Returns the
+/// number of files written.
+#[tauri::command]
+pub async fn export_pattern(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    slot: u16,
+    format: String,
+    target: String,
+    folder: String,
+    name: String,
+) -> CmdResult<usize> {
+    with_device(&state, move |dev| {
+        let slot = pad_index(slot)?;
+        if !dev.pattern_exists(slot)? {
+            return Err(Failure::Other(format!("there is no pattern in {slot}")));
+        }
+        let place = Place::new(&target, &folder)?;
+        place.create(dev)?;
+        let name = file_safe(&name);
+        match format.as_str() {
+            "smf" => {
+                let project = dev.current_project()? + 1;
+                let path = format!(
+                    "ROLAND/SP-404MKII/PROJECT_{project:02}/PTN/PTN{:05}.BIN",
+                    slot.index() + 1
+                );
+                let pattern = Pattern::parse(&dev.read_file(&path)?)?;
+                // The official app writes the tempo of the pattern's bank.
+                let tempo = dev
+                    .project_settings(project - 1)?
+                    .bank(usize::from(slot.bank()))
+                    .tempo;
+                place.write(
+                    dev,
+                    &format!("{name}.mid"),
+                    &smf::from_pattern(&pattern, tempo),
+                )?;
+                Ok(1)
+            }
+            "bounce" => {
+                let file = format!("{name}.wav");
+                emit(&app, &file, 0, 1);
+                let mut out = std::io::Cursor::new(Vec::new());
+                dev.bounce_pattern(slot, &mut out)?;
+                place.write(dev, &file, out.get_ref())?;
+                Ok(1)
+            }
+            "multipad" => {
+                let pads = dev.pattern_pads(slot)?;
+                for (i, &pad) in pads.iter().enumerate() {
+                    let pad_name = dev.pad_block(pad)?.name();
+                    let pad_name = pad_name.trim_end();
+                    let file = if pad_name.is_empty() {
+                        format!("{}.wav", label(pad))
+                    } else {
+                        format!("{} {}.wav", label(pad), file_safe(pad_name))
+                    };
+                    emit(&app, &file, i, pads.len());
+                    let mut out = std::io::Cursor::new(Vec::new());
+                    dev.render_pattern_pad(slot, pad, &mut out)?;
+                    place.write(dev, &file, out.get_ref())?;
+                }
+                Ok(pads.len())
+            }
+            other => Err(Failure::Other(format!("no export format called {other:?}"))),
+        }
+    })
+    .await
+}
+
+/// The files of a project folder on the device, relative to it, sub-folders included.
+fn project_files(dev: &Device, root: &str) -> Result<Vec<String>, Failure> {
+    let mut files = Vec::new();
+    let mut stack = vec![String::new()];
+    while let Some(rel) = stack.pop() {
+        let dir = if rel.is_empty() {
+            root.to_string()
+        } else {
+            format!("{root}/{rel}")
+        };
+        for e in dev.list_dir(&dir)? {
+            let child = if rel.is_empty() {
+                e.name.clone()
+            } else {
+                format!("{rel}/{}", e.name)
+            };
+            if e.is_dir() {
+                stack.push(child);
+            } else {
+                files.push(child);
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// Copy the whole folder of `project` (1-based) into `folder` on the computer.
+/// Returns the number of files.
+#[tauri::command]
+pub async fn backup_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    project: u8,
+    folder: String,
+) -> CmdResult<usize> {
+    with_device(&state, move |dev| {
+        if !(1..=16).contains(&project) {
+            return Err(Failure::Other(format!("there is no project {project}")));
+        }
+        let root = format!("ROLAND/SP-404MKII/PROJECT_{project:02}");
+        let files = project_files(dev, &root)?;
+        let base = PathBuf::from(&folder);
+        for (i, rel) in files.iter().enumerate() {
+            emit(&app, rel, i, files.len());
+            let data = dev.read_file(&format!("{root}/{rel}"))?;
+            let path = base.join(rel);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| Failure::Other(format!("creating {}: {e}", parent.display())))?;
+            }
+            std::fs::write(&path, data)
+                .map_err(|e| Failure::Other(format!("writing {}: {e}", path.display())))?;
+        }
+        Ok(files.len())
+    })
+    .await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupInfo {
+    /// The project folder itself, which may be inside the folder that was picked.
+    folder: String,
+    name: String,
+    files: usize,
+    bytes: u64,
+}
+
+/// The project folder in `picked`: `picked` itself when it holds `PADCONF.BIN`, or the
+/// one project under `ROLAND/SP-404MKII`, as the official app and `sp404` lay it out.
+fn backup_root(picked: &Path) -> Result<PathBuf, Failure> {
+    if picked.join("PADCONF.BIN").is_file() {
+        return Ok(picked.to_path_buf());
+    }
+    let nested = picked.join("ROLAND").join("SP-404MKII");
+    let projects: Vec<PathBuf> = std::fs::read_dir(&nested)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.join("PADCONF.BIN").is_file())
+        .collect();
+    match projects.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => Err(Failure::Other(format!(
+            "{} holds no project backup (no PADCONF.BIN)",
+            picked.display()
+        ))),
+        _ => Err(Failure::Other(format!(
+            "{} holds {} projects; pick the one to restore",
+            nested.display(),
+            projects.len()
+        ))),
+    }
+}
+
+/// The files of a backup in the order the official app writes them: `PADCONF.BIN`, then
+/// pictures, the pattern chain, patterns and samples.
+fn backup_files(root: &Path) -> Result<Vec<(String, Vec<u8>)>, Failure> {
+    let mut names = vec!["PADCONF.BIN".to_string()];
+    for sub in ["PICTURE", "PTN", "SMPL"] {
+        let mut found: Vec<String> = std::fs::read_dir(root.join(sub))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            // The Mac's own files, when a backup went through Finder.
+            .filter(|n| !n.starts_with("._") && n != ".DS_Store")
+            .collect();
+        found.sort_by_key(|n| (!n.ends_with(".CHN"), n.clone()));
+        names.extend(found.into_iter().map(|n| format!("{sub}/{n}")));
+    }
+    names
+        .into_iter()
+        .map(|rel| {
+            let path = root.join(&rel);
+            std::fs::read(&path)
+                .map(|data| (rel, data))
+                .map_err(|e| Failure::Other(format!("reading {}: {e}", path.display())))
+        })
+        .collect()
+}
+
+/// Look at a backup before restoring it.
+#[tauri::command]
+pub async fn read_backup(folder: String) -> CmdResult<BackupInfo> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<BackupInfo, String> {
+        let root = backup_root(Path::new(&folder)).map_err(failure_text)?;
+        let files = backup_files(&root).map_err(failure_text)?;
+        let name = sp404_formats::padconf::Padconf::parse(&files[0].1)
+            .map_err(|e| e.to_string())?
+            .settings()
+            .name();
+        Ok(BackupInfo {
+            folder: root.to_string_lossy().into_owned(),
+            name,
+            files: files.len(),
+            bytes: files.iter().map(|(_, d)| d.len() as u64).sum(),
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn failure_text(f: Failure) -> String {
+    match f {
+        Failure::Device(e) => e.to_string(),
+        Failure::Other(e) => e,
+    }
+}
+
+/// Replace the current project with a backup (Import to MKII). Everything in the current
+/// project is erased first.
+#[tauri::command]
+pub async fn restore_backup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    folder: String,
+) -> CmdResult<usize> {
+    with_device(&state, move |dev| {
+        let root = backup_root(Path::new(&folder))?;
+        let files = backup_files(&root)?;
+        let total: u64 = files.iter().map(|(_, d)| d.len() as u64).sum();
+        let free = u64::from(dev.free_kb()?) * 1024;
+        if total > free {
+            return Err(Failure::Other(format!(
+                "the backup needs {} MB and the device has {} MB free",
+                total / 1_000_000,
+                free / 1_000_000
+            )));
+        }
+        let project = dev.current_project()?;
+        let count = files.len();
+        dev.restore_project(project, &files, |i, f| emit(&app, f, i, count))?;
+        Ok(count)
+    })
+    .await
 }

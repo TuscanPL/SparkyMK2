@@ -125,6 +125,8 @@ export interface ClearParts {
   settings: boolean;
   /** Startup and screen saver images. */
   screenImages: boolean;
+  /** Only this bank's samples and patterns (0 = A); null for the whole project. */
+  bank: number | null;
 }
 
 /** What the device is doing, polled several times a second. */
@@ -220,6 +222,25 @@ export interface Library {
   skipped: string[];
 }
 
+/** A Standard MIDI File, one WAV of the whole pattern, or one WAV per pad it plays. */
+export type PatternFormat = "smf" | "bounce" | "multipad";
+
+/** A project backup found on the computer, before it is restored. */
+export interface BackupInfo {
+  /** The project folder itself, which may sit inside the folder picked. */
+  folder: string;
+  name: string;
+  files: number;
+  bytes: number;
+}
+
+/** A pad's estimated key, found on this computer; the device keeps none. */
+export interface KeyResult {
+  name: string;
+  camelot: string;
+  confidence: number;
+}
+
 export type PadOperation = "truncate" | "normalize" | "delete";
 
 export const api = {
@@ -246,6 +267,11 @@ export const api = {
     invoke<ExportSummary>("export_pads", { pads, target, folder, sidecar }),
   readExport: (target: Place, folder: string) => invoke<ExportSheet>("read_export", { target, folder }),
   restorePads: (target: Place, folder: string) => invoke<number>("restore_pads", { target, folder }),
+  backupProject: (project: number, folder: string) => invoke<number>("backup_project", { project, folder }),
+  readBackup: (folder: string) => invoke<BackupInfo>("read_backup", { folder }),
+  restoreBackup: (folder: string) => invoke<number>("restore_backup", { folder }),
+  exportPattern: (slot: number, format: PatternFormat, target: Place, folder: string, name: string) =>
+    invoke<number>("export_pattern", { slot, format, target, folder, name }),
 
   setPadParam: (pad: number, name: string, value: number) =>
     invoke<PadState>("set_pad_param", { pad, name, value }),
@@ -259,6 +285,7 @@ export const api = {
     invoke<ImportResult>("import_audio", { pad, path, detectBpm, bpmRange }),
   importFromDevice: (pad: number, volume: Volume, remote: string, detectBpm: boolean, bpmRange: number) =>
     invoke<ImportResult>("import_from_device", { pad, volume, remote, detectBpm, bpmRange }),
+  detectKey: (pad: number) => invoke<KeyResult | null>("detect_key", { pad }),
   analyzeBpm: (pad: number, mode: "detect" | "length", bpmRange: number) =>
     invoke<BpmResult>("analyze_bpm", { pad, mode, bpmRange }),
   setGlobalParam: (name: string, value: number) => invoke<Status>("set_global_param", { name, value }),

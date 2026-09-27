@@ -42,7 +42,7 @@ where SparkyMK2 stands on each.
 | TS/PS: BPM, BPM Sync, Time Stretch, Groove, Rate, Humanize, Pitch Coarse/Fine, Vinyl | ✅ | ✅ |
 | Analyze BPM, Set BPM by St/End | host-side (`sp404-dsp`) | ✅ |
 | AHR: Attack, Hold, Release | ✅ | ✅ |
-| Key (pad parameter `89`, Camelot index) | ✅ parameter known | ❌ not shown or set; our own detector is CLI only (`sp404 analyze`) |
+| Key (pad parameter `89`, Camelot index) | 🟡 accepted but not kept on 5.52 | ✅ detected on the computer and shown; nothing to store it in |
 | Info Mode selector: Sample / Mute Group / Pad Link / MIDI Note / MIDI Note (DAW) | local | ❌ |
 | FILES: export folder browser, drag a pad to the computer, Open Folder | local | 🟡 export to the card or a chosen folder; no dragging a pad out |
 | Delete sample | ✅ | ✅ a button, not a trash target |
@@ -59,13 +59,13 @@ where SparkyMK2 stands on each.
 | BPM detect range setting (from the device) | 🟡 presets known; the device message that carries the setting is not identified | 🟡 picked in the app, not read from the device |
 | Export sample as WAV | ✅ | ✅ one pad, a bank or the whole project, to the card or the computer |
 | Export with settings, restore to the same pads | ✅ an extra | ✅ `sparkymk2.json` beside the WAVs; a restore keeps gaps |
-| Export project to PC (full folder copy) | ✅ byte-identical to the app's export | 🟡 copy the project folder in the Files tab; CLI: `export-project` |
-| Import to MKII, full restore | ✅ `92` erases the current project, file copy, `B1` reload | CLI: `restore-project` |
+| Export project to PC (full folder copy) | ✅ byte-identical to the app's export | ✅ Settings, Back up |
+| Import to MKII, full restore | ✅ `92` erases the current project, file copy, `B1` reload | ✅ Settings, Restore a backup, into the current project |
 | Import to MKII, Samples Bank / Patterns Bank | ❌ not captured | ❌ |
-| Export pattern as SMF | host-side, byte-identical to the app's export | CLI |
-| Export pattern as Bounce | ✅ `B8 1003`; device writes the WAV back over the file API | CLI |
-| Export pattern as MULTIPAD | ✅ `B7`, `B8 pad` | CLI |
-| Init project: All / All Samples / Samples Bank / All Patterns / Patterns Bank | ✅ `92` | 🟡 Clear project picks samples, patterns, screen images and settings; no single bank. CLI: all five |
+| Export pattern as SMF | host-side, byte-identical to the app's export | ✅ to the card or the computer |
+| Export pattern as Bounce | ✅ `B8 1003`; device writes the WAV back over the file API | ✅ |
+| Export pattern as MULTIPAD | ✅ `B7`, `B8 pad` | ✅ |
+| Init project: All / All Samples / Samples Bank / All Patterns / Patterns Bank | ✅ `92` | ✅ Clear project, whole project or one bank |
 | Project name edit, project select | ✅ | ✅ only the current project can be renamed, as the device allows |
 
 ## Patterns tab
@@ -74,7 +74,7 @@ where SparkyMK2 stands on each.
 |---|---|---|
 | Pattern matrix with existence flags | ✅ | ✅ |
 | Pattern info and MIDI note map | ✅ file format decoded | ✅ |
-| Drag and drop pattern export | see Import / export | ❌ |
+| Drag and drop pattern export | see Import / export | 🟡 export buttons, no dragging out |
 | Pattern import (`.BIN` / `.MID`) | 🟡 app copies into `PTN/` (from code); not captured | ❌ |
 
 ## Settings tab

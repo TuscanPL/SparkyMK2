@@ -18,6 +18,18 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 - Share a frame as a share code, a line of text to paste into a chat; Paste share code…
   picks it out of a whole message. Sets are shared as their PNG file, which Add files…
   takes back, along with card BMPs. ([#4])
+- Export a pattern from the Patterns tab, as the official app does: a MIDI file at its
+  bank's tempo, a Bounce (one WAV of the whole pattern) or MULTIPAD (a WAV per pad it
+  plays), to the SD card's `EXPORT` folder or to the computer. The unit renders the WAVs
+  itself, so those take as long as the pattern plays.
+- Back up a project to the computer and restore a backup into the current project, in
+  Settings. A backup is the project's whole folder, the same files the official app
+  exports; restoring takes that folder or one laid out as `ROLAND/SP-404MKII/PROJECT_xx`,
+  and asks for the project number before it replaces anything.
+- Clear project can clear one bank's samples or patterns, the device's Samples Bank and
+  Patterns Bank inits.
+- Detect a pad's key, between Start and End, in the Samples tab. It is shown in the app
+  only: the SP-404MKII accepts a key but keeps none (firmware 5.52).
 
 ### Changed
 
@@ -28,6 +40,10 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ### Fixed
 
+- Groove, Rate and Humanize show in the Samples tab. They were set like the other
+  parameters but left out, because where the pad keeps them was not known.
+- Files dropped on a pad on a Linux screen scaled above 100% land on that pad; the drop
+  position was divided by the scale, which only Windows needs.
 - Disconnecting, switching to another port or quitting the app sends MKII EXIT, so the
   SP-404MKII leaves its remote screen instead of staying on it with nothing connected.
 

@@ -5,9 +5,9 @@
 // gaps included, and the settings with it. Only SparkyMK2 reads that file: the device's
 // own IMPORT still sees plain WAVs, and fills pads in order.
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, errorText, type Place } from "./api";
+import { api, errorText, type PatternFormat, type Place } from "./api";
 import { BANK_LETTERS, bankOf, exportStamp, fsSafe, padFromName, padLabel } from "./format";
-import { ask, dropWaveform, editBlock, loadPads, notify, selectPad, store } from "./store";
+import { ask, dropWaveform, editBlock, loadPads, notify, promptText, refresh, selectPad, store } from "./store";
 
 /** On the card, exports land in IMPORT, where the device's own IMPORT browser looks. */
 const CARD_FOLDER = "IMPORT";
@@ -15,17 +15,21 @@ const CARD_FOLDER = "IMPORT";
 export type ExportScope = "pad" | "bank" | "project";
 
 /** Ask where an export goes: the SD card, or a folder picked on the computer. */
-async function choosePlace(title: string): Promise<{ target: Place; base: string } | null> {
+async function choosePlace(
+  title: string,
+  message = "Save the WAVs to the SD card, in IMPORT where the device's own IMPORT finds them, or to a folder on this computer?",
+  cardFolder = CARD_FOLDER,
+): Promise<{ target: Place; base: string } | null> {
   const where = await ask(
     title,
-    "Save the WAVs to the SD card, in IMPORT where the device's own IMPORT finds them, or to a folder on this computer?",
+    message,
     [
       { label: "Cancel", value: "cancel" },
       { label: "Computer…", value: "local" },
       { label: "SD card", value: "card", kind: "primary" },
     ],
   );
-  if (where === "card") return { target: "card", base: CARD_FOLDER };
+  if (where === "card") return { target: "card", base: cardFolder };
   if (where !== "local") return null;
   const picked = await open({ directory: true, title: "Export into" });
   return typeof picked === "string" ? { target: "local", base: picked } : null;
@@ -134,4 +138,116 @@ export async function restoreExport(target: Place, folder: string) {
 export async function restoreFromComputer() {
   const picked = await open({ directory: true, title: "Restore an export" });
   if (typeof picked === "string") await restoreExport("local", picked);
+}
+
+const PATTERN_FORMATS: Record<PatternFormat, { what: string; files: string }> = {
+  smf: { what: "as a MIDI file", files: "the MIDI file" },
+  bounce: { what: "as one WAV (Bounce)", files: "the WAV" },
+  multipad: { what: "as a WAV per pad (MULTIPAD)", files: "a WAV for each pad it plays" },
+};
+
+/**
+ * Export the pattern in `slot`: a MIDI file, or WAVs the unit renders as the pattern plays.
+ * A MULTIPAD export gets a folder of its own, named after the pattern and the time.
+ * `onRender` is told when the unit starts and stops rendering, which takes as long as the
+ * pattern plays.
+ */
+export async function exportPattern(slot: number, format: PatternFormat, onRender: (busy: boolean) => void) {
+  const status = store.status;
+  if (!status) return;
+  const project = fsSafe(store.projects[status.project - 1] || `PROJECT_${String(status.project).padStart(2, "0")}`);
+  const label = padLabel(slot);
+  const { what, files } = PATTERN_FORMATS[format];
+  const place = await choosePlace(
+    `Export pattern ${label} ${what}`,
+    `Save ${files} to the SD card, in EXPORT beside the unit's own exports, or to a folder on this computer?`,
+    "EXPORT",
+  );
+  if (!place) return;
+
+  const name = `${project} ${label}`;
+  const folder = format === "multipad" ? within(place.base, `${name} MULTIPAD ${exportStamp()}`) : place.base;
+  store.pending++;
+  if (format !== "smf") onRender(true);
+  try {
+    const written = await api.exportPattern(slot, format, place.target, folder, name);
+    const where = place.target === "card" ? `the SD card, ${folder}` : folder;
+    notify(
+      format === "multipad"
+        ? `${written === 1 ? "1 WAV" : `${written} WAVs`} exported to ${where}`
+        : `Pattern ${label} exported to ${where}`,
+      "info",
+    );
+  } catch (e) {
+    notify(errorText(e));
+  } finally {
+    onRender(false);
+    store.pending--;
+    store.transfer = null;
+  }
+}
+
+function projectLabel(project: number): string {
+  return fsSafe(store.projects[project - 1] || `PROJECT_${String(project).padStart(2, "0")}`);
+}
+
+/** Copy the current project's whole folder to a new folder on the computer. */
+export async function backupProject() {
+  const project = store.status?.project;
+  if (!project) return;
+  const picked = await open({ directory: true, title: `Back up project ${project} into` });
+  if (typeof picked !== "string") return;
+  const folder = within(picked, `${projectLabel(project)} ${exportStamp()}`);
+  store.pending++;
+  try {
+    const files = await api.backupProject(project, folder);
+    notify(`Project ${project} backed up: ${files} files in ${folder}`, "info");
+  } catch (e) {
+    notify(errorText(e));
+  } finally {
+    store.pending--;
+    store.transfer = null;
+  }
+}
+
+/** Replace the current project with a backup from the computer, after typed confirmation. */
+export async function restoreBackup() {
+  const project = store.status?.project;
+  if (!project) return;
+  const picked = await open({ directory: true, title: `Restore a backup into project ${project}` });
+  if (typeof picked !== "string") return;
+  let backup;
+  try {
+    backup = await api.readBackup(picked);
+  } catch (e) {
+    notify(errorText(e));
+    return;
+  }
+  const size = `${backup.files} files, ${(backup.bytes / 1_000_000).toFixed(1)} MB`;
+  const typed = await promptText(
+    `Replace project ${project}?`,
+    `Restoring "${backup.name || "an unnamed project"}" (${size}) erases everything in project ${project} first: ` +
+      `samples, patterns, settings and screen images. Back it up first if you want to keep it. Type ${project} to go ahead.`,
+    "",
+    "Restore",
+  );
+  if (typed === null) return;
+  if (typed !== String(project)) {
+    notify(`Nothing restored: that wasn't ${project}.`, "info");
+    return;
+  }
+  store.pending++;
+  try {
+    const files = await api.restoreBackup(backup.folder);
+    notify(`Project ${project} restored from ${backup.name || "the backup"} (${files} files)`, "info");
+  } catch (e) {
+    notify(errorText(e));
+  } finally {
+    store.pending--;
+    store.transfer = null;
+    // Whatever got through, show it: a restore can stop partway.
+    store.selectedPad = null;
+    store.selectedPattern = null;
+    await refresh();
+  }
 }

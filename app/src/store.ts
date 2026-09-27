@@ -1044,7 +1044,7 @@ export async function clearProject(project: number, parts: ClearParts): Promise<
   store.selectedPad = null;
   store.selectedPattern = null;
   await refresh();
-  notify(`Project ${project} cleared`, "info");
+  notify(parts.bank === null ? `Project ${project} cleared` : `Bank ${"ABCDEFGHIJ"[parts.bank]} of project ${project} cleared`, "info");
   return true;
 }
 

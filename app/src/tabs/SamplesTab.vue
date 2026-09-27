@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import BankStrip from "../components/BankStrip.vue";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
@@ -60,6 +60,29 @@ const groups = computed(() => {
     params: g.names.flatMap((n) => (byName.has(n) ? [byName.get(n)!] : [])),
   }));
 });
+
+/** Keys found this session, by project and pad; the device has nowhere to keep them. */
+const keys = reactive<Record<string, string | null>>({});
+const keyBusy = ref(false);
+const keyId = (pad: number) => `${store.status?.project}:${pad}`;
+const keyText = computed(() => {
+  const d = detail.value;
+  if (!d) return null;
+  const found = keys[keyId(d.index)];
+  return found === undefined ? null : found ?? "No clear key";
+});
+
+async function findKey(pad: number) {
+  keyBusy.value = true;
+  try {
+    const key = await api.detectKey(pad);
+    keys[keyId(pad)] = key ? `${key.name} (${key.camelot})` : null;
+  } catch (e) {
+    handleError(e);
+  } finally {
+    keyBusy.value = false;
+  }
+}
 
 const vinylOn = computed(() => !!detail.value?.params.find((p) => p.name === "vinyl")?.value);
 
@@ -291,6 +314,16 @@ async function commitChops(points: number[]) {
                       :disabled="locked || (vinylOn && (p.name === 'pitch-coarse' || p.name === 'pitch-fine'))"
                       @commit="commitParam(p.name, $event)"
                     />
+                    <div v-if="p.name === 'pitch-fine'" class="key-field">
+                      <span class="name">Key</span>
+                      <span class="key-value">
+                        <span v-if="keyText" class="mono">{{ keyText }}</span>
+                        <span v-else class="muted">Not detected</span>
+                        <button class="small" :disabled="keyBusy" title="Estimate the key between Start and End; shown here only, as the SP-404MKII keeps no key" @click="findKey(detail.index)">
+                          {{ keyBusy ? "Listening…" : "Detect" }}
+                        </button>
+                      </span>
+                    </div>
                     <div v-if="p.name === 'bpm'" class="bpm-tools">
                       <button class="small" :disabled="locked" @click="analyzeBpm(detail.index, 'detect')">Detect</button>
                       <button class="small" :disabled="locked" title="Whole beats that fit between Start and End" @click="analyzeBpm(detail.index, 'length')">From Start–End</button>
@@ -558,6 +591,26 @@ label.row:first-of-type {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.key-field {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+}
+
+.key-field .name {
+  color: var(--muted);
+}
+
+.key-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 12.5px;
 }
 
 .bpm-tools {

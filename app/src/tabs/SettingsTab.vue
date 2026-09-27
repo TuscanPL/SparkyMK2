@@ -4,7 +4,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
-import { PROJECT_NAME_LEN, bpm, storage } from "../format";
+import { BANK_LETTERS, PROJECT_NAME_LEN, bpm, storage } from "../format";
+import { backupProject, restoreBackup } from "../exporting";
 import type { ClearParts } from "../api";
 import { clearProject, loadLibrary, renameProject, savePrefs, setGlobalParam, setLibraryDir, store } from "../store";
 
@@ -21,7 +22,7 @@ async function chooseLibraryDir() {
 
 const locked = () => store.status?.workingMode === 4;
 
-const nothing: ClearParts = { samples: false, patterns: false, settings: false, screenImages: false };
+const nothing: ClearParts = { samples: false, patterns: false, settings: false, screenImages: false, bank: null };
 /** What Clear project will remove. */
 const parts = reactive<ClearParts>({ ...nothing });
 /** The project number, typed to confirm. */
@@ -31,6 +32,13 @@ watch(
   () => parts.settings,
   (on) => {
     if (on) Object.assign(parts, { samples: true, patterns: true });
+  },
+);
+// A bank has samples and patterns of its own; settings and screen images are the project's.
+watch(
+  () => parts.bank,
+  (bank) => {
+    if (bank !== null) Object.assign(parts, { settings: false, screenImages: false });
   },
 );
 watch(
@@ -136,15 +144,22 @@ function commitVolume(letter: string, current: number) {
         Removes what is ticked from project {{ store.status.project }} and keeps the rest. It
         cannot be undone: export what you want to keep first.
       </p>
+      <label class="field scope">
+        <span>From</span>
+        <select v-model="parts.bank">
+          <option :value="null">The whole project</option>
+          <option v-for="(letter, i) in BANK_LETTERS" :key="letter" :value="i">Bank {{ letter }} only</option>
+        </select>
+      </label>
       <div class="parts">
         <label><input v-model="parts.samples" type="checkbox" :disabled="parts.settings" /> Samples</label>
         <label><input v-model="parts.patterns" type="checkbox" :disabled="parts.settings" /> Patterns</label>
         <label>
-          <input v-model="parts.screenImages" type="checkbox" /> Screen images
+          <input v-model="parts.screenImages" type="checkbox" :disabled="parts.bank !== null" /> Screen images
           <span class="muted">startup and screen savers go back to the SP-404MKII's own</span>
         </label>
         <label>
-          <input v-model="parts.settings" type="checkbox" /> Settings and name
+          <input v-model="parts.settings" type="checkbox" :disabled="parts.bank !== null" /> Settings and name
           <span class="muted">tempos and bank settings; takes samples and patterns with them</span>
         </label>
       </div>
@@ -158,6 +173,22 @@ function commitVolume(letter: string, current: number) {
         />
         <button class="danger" :disabled="!canClear" @click="onClear">Clear</button>
       </div>
+    </section>
+
+    <section class="panel card backup">
+      <div class="label">Back up and restore</div>
+      <p class="muted hint">
+        A backup copies project {{ store.status.project }}'s whole folder to this computer: samples, patterns,
+        settings and screen images, the same files the official app exports. Restoring one replaces everything in
+        project {{ store.status.project }}.
+      </p>
+      <div class="backup-buttons">
+        <button :disabled="store.pending > 0" @click="backupProject">Back up project {{ store.status.project }}…</button>
+        <button class="danger" :disabled="store.pending > 0 || locked()" @click="restoreBackup">Restore a backup…</button>
+      </div>
+      <p v-if="store.transfer && store.pending > 0" class="muted progress">
+        <span class="spinner" /> {{ store.transfer.name }} ({{ store.transfer.done + 1 }} of {{ store.transfer.total }})
+      </p>
     </section>
 
     <section class="panel card">
@@ -343,6 +374,25 @@ function commitVolume(letter: string, current: number) {
   gap: 12px;
   margin-top: 10px;
   cursor: pointer;
+}
+
+.scope {
+  margin: 8px 0 2px;
+}
+
+.backup-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 12px;
 }
 
 .library-dir {

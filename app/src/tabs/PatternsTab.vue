@@ -5,6 +5,7 @@ import NoteLanes from "../components/NoteLanes.vue";
 import PadGrid from "../components/PadGrid.vue";
 import { api, type PatternDetail } from "../api";
 import { bpm, padLabel } from "../format";
+import { exportPattern } from "../exporting";
 import { handleError, loadPatterns, store } from "../store";
 
 const counts = computed(() => {
@@ -14,6 +15,8 @@ const counts = computed(() => {
 });
 
 const detail = ref<PatternDetail | null>(null);
+/** The unit is rendering a Bounce or MULTIPAD export, in real time. */
+const rendering = ref(false);
 const loading = ref(false);
 let request = 0;
 
@@ -93,6 +96,25 @@ watch(
             </div>
           </div>
 
+          <div>
+            <div class="label">Export</div>
+            <div class="exports">
+              <button :disabled="store.pending > 0" title="A Standard MIDI File at the bank tempo" @click="exportPattern(detail.index, 'smf', (b) => (rendering = b))">
+                MIDI file…
+              </button>
+              <button :disabled="store.pending > 0" title="The unit plays the pattern and records it to one WAV" @click="exportPattern(detail.index, 'bounce', (b) => (rendering = b))">
+                Bounce…
+              </button>
+              <button :disabled="store.pending > 0 || !detail.padsUsed.length" title="The unit records each pad the pattern plays to its own WAV" @click="exportPattern(detail.index, 'multipad', (b) => (rendering = b))">
+                MULTIPAD…
+              </button>
+              <span v-if="rendering" class="muted rendering">
+                <span class="spinner" />
+                {{ store.transfer ? store.transfer.name : "Rendering" }} — the unit plays the pattern to record it, so this takes as long as it plays.
+              </span>
+            </div>
+          </div>
+
           <NoteLanes v-if="detail.padsUsed.length" :pattern="detail" />
         </template>
       </section>
@@ -153,6 +175,21 @@ watch(
   font-size: 22px;
   font-weight: 600;
   color: var(--teal);
+}
+
+.exports {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.rendering {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
 }
 
 .facts {

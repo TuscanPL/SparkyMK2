@@ -375,6 +375,48 @@ pub async fn analyze_bpm(
     .await
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyResult {
+    /// "F min".
+    name: String,
+    /// "4A".
+    camelot: String,
+    confidence: f32,
+}
+
+/// Estimate the key of what a pad plays, between Start and End. Nothing is stored: the
+/// device keeps no key (its `89` parameter is accepted and dropped on firmware 5.52).
+#[tauri::command]
+pub async fn detect_key(state: State<'_, AppState>, pad: u16) -> CmdResult<Option<KeyResult>> {
+    with_device(&state, move |dev| {
+        let pad = pad_index(pad)?;
+        let block = dev.pad_block(pad)?;
+        if !block.has_sample() {
+            return Err(format!("{pad} is empty").into());
+        }
+        let project = dev.current_project()? + 1;
+        let audio = Sample::from_smp(&dev.read_file(&pad.sample_path(project))?)?;
+        let channels = usize::from(audio.channels.max(1));
+        let (start, end) = block.start_end_bytes();
+        let at = |offset: u32| {
+            let i = (offset.saturating_sub(smp::HEADER_LEN as u32) as usize / 2)
+                .min(audio.samples.len());
+            i - i % channels
+        };
+        let region = &audio.samples[at(start)..at(end).max(at(start))];
+        let mono = sp404_dsp::mono_from_i16(region, channels);
+        Ok(
+            sp404_dsp::key::detect(&mono, smp::SAMPLE_RATE).map(|k| KeyResult {
+                name: k.name(),
+                camelot: k.camelot(),
+                confidence: k.confidence,
+            }),
+        )
+    })
+    .await
+}
+
 /// Project and bank settings: `project-tempo`, `tempo-select`, and `bank-tempo-a`,
 /// `bank-volume-a` or `bank-protect-a` through `…-j`.
 #[tauri::command]
@@ -439,12 +481,34 @@ pub async fn clear_project(
     patterns: bool,
     settings: bool,
     screen_images: bool,
+    bank: Option<u8>,
 ) -> CmdResult<StatusDto> {
     with_device(&state, move |dev| {
         if !(1..=16).contains(&project) {
             return Err(format!("no project {project}").into());
         }
         let index = project - 1;
+        // One bank: the device's Samples Bank and Patterns Bank inits. Settings and screen
+        // images belong to the whole project, so they are not part of a bank clear.
+        if let Some(bank) = bank {
+            if bank > 9 {
+                return Err(format!("no bank {bank}").into());
+            }
+            if settings || screen_images {
+                return Err(
+                    "settings and screen images belong to the whole project, not one bank"
+                        .to_string()
+                        .into(),
+                );
+            }
+            if samples {
+                dev.init_project(index, InitScope::SamplesBank(bank))?;
+            }
+            if patterns {
+                dev.init_project(index, InitScope::PatternsBank(bank))?;
+            }
+            return read_status(dev);
+        }
         let kept = if settings && !screen_images {
             screens::slots()
                 .map(|slot| Ok((slot, dev.read_screen(project, slot)?)))
