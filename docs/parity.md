@@ -1,133 +1,128 @@
 # Parity checklist
 
-Features of the official SP-404MKII App 4.05, collected from its UI and string table.
-Protocol status: ✅ decoded · 🟡 partly · ❌ not yet.
+Features of the official SP-404MKII App 4.05, collected from its UI and string table, and
+where SparkyMK2 stands on each.
 
-## Implemented in the Rust core and verified on hardware
-
-- Status, project list, project settings readout (tempo select, bank tempo/volume/protect)
-- Project select
-- Pad parameter read (including channel count from SMP headers)
-- Waveform peaks
-- Preview
-- Directory listing, file download and upload, rename, delete, mkdir and rmdir, on
-  both the device's own storage and the SD card
-- Project export
-- Sample → WAV
-- Set parameter, including loop top
-- Audio import: WAV, AIFF, FLAC, MP3 at any sample rate; mono stays mono, as in the app
-  (48 kHz stereo and 44.1 kHz mono verified on the device; other formats and rates
-  verified offline)
-- Truncate and normalize
-- Sample and project rename
-- Delete sample
-- Move, overwrite or exchange samples between pads
-- Init (all five scopes)
-- Device error reporting
-- Pattern list, pattern export as SMF (from the device, or offline from a backup)
-- Pattern export as Bounce and MULTIPAD (device renders; host serves its file writes)
-- MKII EXIT
-- Restore a project from a backup folder (Import to MKII, full)
-- Offline `PADCONF.BIN` reader (project backups)
-- Analyze BPM and Set BPM by St/End (host-side, app rules), Auto Detect BPM on import
-- Key detection (an extra; the official app has none)
-- Display images: read and replace a project's startup and screen saver frames (an
-  extra; the official app only writes them as part of Import to MKII)
+- **Protocol**: ✅ decoded · 🟡 partly · ❌ not yet. Checked by the Rust core against the
+  device, unless marked host-side.
+- **App**: ✅ in the desktop app · 🟡 partly · CLI: only in `sp404` · ❌ not yet.
 
 ## Connection
 
-| Feature | Protocol |
-|---|---|
-| Find the device's serial port by USB description | ✅ |
-| Connect / Disconnect; lost-connection handling | 🟡 |
-| MKII EXIT (leave remote mode on the device) | ✅ `3A` |
-| Firmware check (requires 4.xx or later) | 🟡 |
-| Working-mode display (Deejay / Chromatic / 16 Velocities / Edit / Disabled) | 🟡 |
-| Device errors → messages | ✅ `32 code`, message = table[code + 130] |
+| Feature | Protocol | App |
+|---|---|---|
+| Find the device's serial port by USB description | ✅ | ✅ one entry per device on macOS (`cu.*`) |
+| Connect / Disconnect | ✅ | ✅ |
+| Lost connection | ✅ a failed write means the port is gone | ✅ back to the connect screen with one message, and it connects again when the device is plugged back in |
+| MKII EXIT (leave remote mode on the device) | ✅ `3A` | CLI: `mkii-exit`; the app does not send it on disconnect |
+| Firmware check (requires 4.xx or later) | 🟡 | ❌ |
+| Working-mode display (Deejay / Chromatic / 16 Velocities / Edit / Disabled) | 🟡 status byte 12; only 4 (a menu is open) is known | 🟡 a banner and locked editing while a menu is open; the other modes are not named |
+| Device errors → messages | ✅ `32 code`, message = table[code + 130] | ✅ |
+| Follow the unit: pads hit on the device select and light in the app | ✅ an extra | ✅ |
+| Select a pad or bank on the unit from the app | ✅ an extra | ✅ |
 
 ## Samples tab
 
-| Feature | Protocol |
-|---|---|
-| Pad matrix: 10 banks × 16 pads, occupied state, bank protect ("P") | ✅ |
-| Bank tempo readout per bank | ✅ |
-| Waveform view with zoom (horizontal/vertical), S/E markers, loop top | ✅ peaks |
-| Chop editing: Edit Chop, Add/Remove Chop, Remove All, Auto Assign, Create Chop Points, Snap to Grid | ✅ chop points `8E`–`9D` (verified on hardware), Edit Chop toggle `8F pad 02`; Auto Assign / Create Chop Points are host-side |
-| Set START / END / LOOP TOP here, From [S], Link [S][E] | ✅ `67`/`68`/`71` |
-| Preview / Stop | ✅ `8E` / `8F` |
-| Truncate, Normalize, Emphasis | ✅ device-side commands (the app has one Emphasis action) |
-| Info: name edit, channel, length, start/end, Gate, Loop, Fixed Velocity, One Shot, Play Mode, Level, Balance | ✅ |
-| Prms: Mute Group, PAD Link, BUS FX Assign, Roll, Chromatic Mode | ✅ (option labels to confirm) |
-| TS/PS: BPM, Analyze BPM, Set BPM by St/End, BPM Sync, Time Stretch, Groove, Rate, Humanize, Pitch Coarse/Fine, Vinyl | ✅ protocol; Analyze BPM and St/End implemented host-side (`sp404-dsp`) |
-| AHR: Attack, Hold, Release | ✅ |
-| FILES: export folder browser, drag and drop pad to PC, Open Folder | local |
-| Info Mode selector: Sample / Mute Group / Pad Link / MIDI Note / MIDI Note (DAW) | local |
-| Delete sample (drag to trash) | ✅ |
-| Move pad onto empty pad | ✅ `95` |
-| Exchange / overwrite onto an occupied pad | ✅ `95 … mode` |
+| Feature | Protocol | App |
+|---|---|---|
+| Pad matrix: 10 banks × 16 pads, occupied state, bank protect ("P") | ✅ | ✅ |
+| Bank tempo readout per bank | ✅ | ✅ |
+| Waveform view, S/E markers, loop top | ✅ peaks | ✅ drag S, E and L |
+| Waveform zoom (horizontal/vertical) | local | ❌ |
+| Chop points: add, move, remove, remove all | ✅ `8E`–`9D` (verified on hardware) | ✅ |
+| Edit Chop toggle | ✅ `8F pad 02` | ❌ |
+| Auto Assign, Create Chop Points, Snap to Grid | host-side | ❌ |
+| Set START / END / LOOP TOP | ✅ `67`/`68`/`71` | ✅ |
+| From [S], Link [S][E] | local | ❌ |
+| Preview / Stop | ✅ `8E` / `8F` | ✅ start to end, with a playhead |
+| Truncate, Normalize | ✅ | ✅ |
+| Emphasis | ❌ | ❌ |
+| Info: name edit, channel, length, Gate, Loop, Fixed Velocity, One Shot, Play Mode, Level, Balance | ✅ | ✅ |
+| Prms: Mute Group, PAD Link, BUS FX Assign, Roll, Chromatic Mode | ✅ (option labels to confirm) | ✅ |
+| TS/PS: BPM, BPM Sync, Time Stretch, Groove, Rate, Humanize, Pitch Coarse/Fine, Vinyl | ✅ | ✅ |
+| Analyze BPM, Set BPM by St/End | host-side (`sp404-dsp`) | ✅ |
+| AHR: Attack, Hold, Release | ✅ | ✅ |
+| Key (pad parameter `89`, Camelot index) | ✅ parameter known | ❌ not shown or set; our own detector is CLI only (`sp404 analyze`) |
+| Info Mode selector: Sample / Mute Group / Pad Link / MIDI Note / MIDI Note (DAW) | local | ❌ |
+| FILES: export folder browser, drag a pad to the computer, Open Folder | local | 🟡 export to the card or a chosen folder; no dragging a pad out |
+| Delete sample | ✅ | ✅ a button, not a trash target |
+| Move pad onto an empty pad, across banks | ✅ `95` | ✅ drag |
+| Exchange / overwrite onto an occupied pad | ✅ `95 … mode` | ✅ drag |
 
 ## Import / export
 
-| Feature | Protocol |
-|---|---|
-| Export project to PC (full folder copy) | ✅ |
-| Import to MKII: restore a project from a PC export | ✅ full restore (`92` erases the current project, file copy, `B1` reload); partial variants (Samples Bank, Patterns Bank) not captured |
-| Import audio by drag and drop onto a pad | ✅ |
-| AIFF, MP3, FLAC decoding; sample-rate conversion | ✅ host-side (symphonia, rubato) |
-| Auto Detect BPM | ✅ host-side (`sp404-dsp`, `import --detect-bpm`), same range presets, folding and rounding as the app; the detector itself is our own |
-| BPM detect range setting (from the device) | 🟡 presets known; the device message that carries the setting is not identified |
-| Key | 🟡 the app has no detector: pad parameter `89` (Camelot index) is set on the device side; SparkyMK2 adds its own key detection as an extra |
-| Export sample as WAV | ✅ one pad, a bank or the whole project, to the card or the computer |
-| Export with settings, restore to the same pads | ✅ an extra; `sparkymk2.json` beside the WAVs carries every pad's settings, and a restore keeps gaps |
-| Export pattern as SMF | ✅ host-side conversion |
-| Export pattern as Bounce | ✅ `B8 1003`; device writes the WAV back over the file API |
-| Export pattern as MULTIPAD | ✅ `B7`, `B8 pad` |
-| Init project: All / All Samples / Samples Bank / All Patterns / Patterns Bank | ✅ `92` |
-| Project name edit, project select | ✅ |
+| Feature | Protocol | App |
+|---|---|---|
+| Import audio by drag and drop onto a pad | ✅ | ✅ from the computer or off the card |
+| AIFF, MP3, FLAC decoding; sample-rate conversion | host-side (symphonia, rubato) | ✅ |
+| Auto Detect BPM on import | host-side, the app's range presets, folding and rounding | ✅ |
+| BPM detect range setting (from the device) | 🟡 presets known; the device message that carries the setting is not identified | 🟡 picked in the app, not read from the device |
+| Export sample as WAV | ✅ | ✅ one pad, a bank or the whole project, to the card or the computer |
+| Export with settings, restore to the same pads | ✅ an extra | ✅ `sparkymk2.json` beside the WAVs; a restore keeps gaps |
+| Export project to PC (full folder copy) | ✅ byte-identical to the app's export | 🟡 copy the project folder in the Files tab; CLI: `export-project` |
+| Import to MKII, full restore | ✅ `92` erases the current project, file copy, `B1` reload | CLI: `restore-project` |
+| Import to MKII, Samples Bank / Patterns Bank | ❌ not captured | ❌ |
+| Export pattern as SMF | host-side, byte-identical to the app's export | CLI |
+| Export pattern as Bounce | ✅ `B8 1003`; device writes the WAV back over the file API | CLI |
+| Export pattern as MULTIPAD | ✅ `B7`, `B8 pad` | CLI |
+| Init project: All / All Samples / Samples Bank / All Patterns / Patterns Bank | ✅ `92` | 🟡 Clear project picks samples, patterns, screen images and settings; no single bank. CLI: all five |
+| Project name edit, project select | ✅ | ✅ only the current project can be renamed, as the device allows |
 
 ## Patterns tab
 
-| Feature | Protocol |
-|---|---|
-| Pattern matrix with existence flags | ✅ |
-| Pattern info and MIDI note map | ✅ file format decoded |
-| Drag and drop pattern export | see Import / export |
-| Pattern import (`.BIN` / `.MID`) | 🟡 app copies into `PTN/` (from code); not captured |
+| Feature | Protocol | App |
+|---|---|---|
+| Pattern matrix with existence flags | ✅ | ✅ |
+| Pattern info and MIDI note map | ✅ file format decoded | ✅ |
+| Drag and drop pattern export | see Import / export | ❌ |
+| Pattern import (`.BIN` / `.MID`) | 🟡 app copies into `PTN/` (from code); not captured | ❌ |
 
 ## Settings tab
 
-| Feature | Protocol |
-|---|---|
-| Tempo Select (Project / Bank), Project Tempo, Bank A–J Tempo and Volume | ✅ |
-| Bank protect | ✅ (the app blocks edits on protected banks itself) |
-| Project rename | ✅ |
+| Feature | Protocol | App |
+|---|---|---|
+| Tempo Select (Project / Bank), Project Tempo, Bank A–J Tempo and Volume | ✅ | ✅ |
+| Bank protect | ✅ (the app blocks edits on protected banks itself) | ✅ |
+| Project rename | ✅ | ✅ |
 
 ## Files tab (not in the official app)
 
-| Feature | Protocol |
-|---|---|
-| Browse the device's own storage and the SD card | ✅ `opendir`/`readdir`/`stat`, two path prefixes |
-| Copy files and folders either way | ✅ `open`/`read`/`write`, ~2 MB/s |
-| Rename, delete, mkdir, rmdir | ✅ ops `17`, `0A`, `09`, `0B` |
-| Stage audio for the device's own IMPORT browser | ✅ write into the card's `IMPORT/` |
-| Preview a sound on the device before importing | ✅ an extra; decoded host-side and played on the computer, since the protocol previews only pads |
-| Drag a sound off the card onto a pad | ✅ an extra; read, decode and `import_smp` without touching the computer's disk |
+| Feature | Protocol | App |
+|---|---|---|
+| Browse the device's own storage and the SD card | ✅ `opendir`/`readdir`/`stat`, two path prefixes | ✅ keyboard too; big folders list at once, sizes follow |
+| Copy files and folders either way | ✅ `open`/`read`/`write`, ~2 MB/s | ✅ |
+| Rename, delete, mkdir, rmdir | ✅ ops `17`, `0A`, `09`, `0B` | ✅ card folders are deleted with their contents |
+| Stage audio for the device's own IMPORT browser | ✅ write into the card's `IMPORT/` | ✅ |
+| Preview a sound on the device before importing | host-side decode, played on the computer | ✅ with arrow-key audition |
+| Drag a sound off the card onto a pad | ✅ read, decode and `import_smp` | ✅ |
 
 ## Screens tab (not in the official app)
 
-| Feature | Protocol |
-|---|---|
-| Read `PICTURE/*.bmp` of the current project | ✅ file API |
-| Replace a startup or screen saver frame | ✅ plain file write; no reload needed |
+| Feature | Protocol | App |
+|---|---|---|
+| Read `PICTURE/*.bmp` of the current project | ✅ file API | ✅ |
+| Replace a startup or screen saver frame | ✅ plain file write; no reload needed | ✅ from an image (pan and zoom) or drawn by hand |
+| Apply a screen to several projects at once | ✅ | ❌ requested in #4 |
 
 ## App settings (local only)
 
-- Language (needs restart)
-- Color mode
-- Scale factor
-- MIDI mode
-- Backgrounds: custom image, stretch, mask opacity, gradient top/bottom, slideshow
-- Warnings toggle
+| Feature | App |
+|---|---|
+| Language (needs restart) | ❌ English only |
+| Color mode | ❌ |
+| Scale factor | ❌ |
+| MIDI mode | ❌ |
+| Backgrounds: custom image, stretch, mask opacity, gradient top/bottom, slideshow | ❌ |
+| Warnings toggle | ❌ |
+| Preload sounds when a folder opens | ✅ an extra |
+| Version shown | ✅ |
+
+## Offline tools (CLI, not in the official app)
+
+- Read `PADCONF.BIN`, pattern files and SMP samples from a project backup
+- Convert audio to SMP
+- Analyse audio files for tempo and key
+- Pattern export as SMF from a backup
 
 ## Plugin build (later)
 
