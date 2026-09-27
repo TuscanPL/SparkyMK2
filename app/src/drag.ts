@@ -117,12 +117,14 @@ export function clickAfterDrag(): boolean {
 }
 
 /**
- * What divides a file drop's position to give CSS pixels. Positions are typed as physical
- * pixels, and are on Linux and Windows, but macOS hands them over already logical;
- * dividing there sent a drop on a Retina screen to the pad at half its coordinates.
+ * What divides a file drop's position to give CSS pixels. Tauri labels every position
+ * physical, but passes on whatever the platform reports: WebView2 on Windows gives
+ * physical pixels (`ScreenToClient` on the webview), while macOS (points) and WebKitGTK
+ * on Linux (widget coordinates) give logical ones already. Dividing those put a drop on a
+ * Retina or 200% screen onto the pad at half its coordinates.
  */
-const logicalDrops = navigator.userAgent.includes("Mac OS X");
-const dropScale = () => (logicalDrops ? 1 : window.devicePixelRatio);
+const physicalDrops = navigator.userAgent.includes("Windows");
+const dropScale = () => (physicalDrops ? window.devicePixelRatio : 1);
 
 /** Listen for files dragged in from outside the window. */
 export async function listenForFileDrops() {
