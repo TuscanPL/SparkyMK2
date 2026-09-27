@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-27
+
 ### Added
 
 - A screen library, in the Screens tab's new Library view: display images kept in a folder
