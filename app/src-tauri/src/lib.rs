@@ -4,6 +4,7 @@ mod commands;
 mod edit;
 mod export;
 mod files;
+mod library;
 mod screens;
 
 use std::sync::{Arc, Mutex};
@@ -77,6 +78,17 @@ pub fn run() {
             export::export_pads,
             export::read_export,
             export::restore_pads,
+            screens::apply_screens,
+            library::library_default_dir,
+            library::library_list,
+            library::library_save,
+            library::library_collect,
+            library::library_rename,
+            library::library_delete,
+            library::library_import,
+            library::library_export,
+            library::share_code,
+            library::read_share_code,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SparkyMK2")
