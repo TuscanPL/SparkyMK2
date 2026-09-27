@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-27
+
 ### Fixed
 
 - Small layout slips: the Key label in the Samples tab matches the other labels, a
