@@ -19,6 +19,13 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
   picks it out of a whole message. Sets are shared as their PNG file, which Add files…
   takes back, along with card BMPs. ([#4])
 
+### Changed
+
+- The Screens tab's editor puts the image first: the six slots are a list on the left, with
+  the screen saver's frames under a thumbnail that plays it, the image fills the middle at
+  the largest size the window allows, and loading an image or a library entry, the image
+  settings and saving to the library sit in a column on the right. ([#4])
+
 ### Fixed
 
 - Disconnecting, switching to another port or quitting the app sends MKII EXIT, so the

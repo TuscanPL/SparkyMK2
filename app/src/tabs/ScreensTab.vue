@@ -33,7 +33,6 @@ import {
 } from "../store";
 
 const EDIT_SCALE = 4;
-const THUMB_SCALE = 2;
 const UNDO_LIMIT = 40;
 
 type Source = { source: CanvasImageSource; width: number; height: number };
@@ -262,6 +261,42 @@ watch([playing, speed, group], () => {
 
 onUnmounted(() => window.clearInterval(timer));
 
+/** Play one group in the editor, from its first frame. */
+function play(slots: string[]) {
+  selected.value = slots[0];
+  playing.value = true;
+}
+
+function pick(slot: string) {
+  selected.value = slot;
+  playing.value = false;
+}
+
+// The list's own screen saver thumbnail always runs, a frame a second, skipping blanks.
+const listTick = ref(0);
+const listTimer = window.setInterval(() => listTick.value++, 1000);
+onUnmounted(() => window.clearInterval(listTimer));
+
+const saverThumb = computed(() => {
+  const lit = SCREEN_SAVER_SLOTS.map(pixels).filter((p) => p.some((v) => v));
+  return lit.length ? lit[listTick.value % lit.length] : blank();
+});
+
+// ---- sizing ----
+
+/** The largest whole-pixel scale at which the image fits the space the editor has. */
+const stage = ref<HTMLElement>();
+const editScale = ref(EDIT_SCALE);
+const observer = new ResizeObserver(([entry]) => {
+  const { width, height } = entry.contentRect;
+  editScale.value = Math.max(2, Math.floor(Math.min((width - 2) / WIDTH, (height - 2) / HEIGHT)));
+});
+watch(stage, (el, old) => {
+  if (old) observer.unobserve(old);
+  if (el) observer.observe(el);
+});
+onUnmounted(() => observer.disconnect());
+
 // ---- writing to the device ----
 
 async function apply(slots: string[]) {
@@ -337,24 +372,44 @@ async function putBackOriginal() {
       </button>
     </div>
     <ScreenLibrary v-if="store.screensMode === 'library'" @edit="openInEditor" />
-    <template v-else>
-    <div class="strip">
-      <div v-if="store.screensLoading" class="loading muted"><span class="spinner" /> Reading images…</div>
-      <section v-for="g in groups" :key="g.id" class="panel group">
-        <div class="head">
-          <span class="label">{{ g.label }}</span>
-          <span class="count muted">{{ g.slots.length }} frames</span>
-        </div>
-        <p class="hint muted">{{ g.hint }}</p>
-        <div class="frames" :class="{ wide: g.slots.length > 2 }">
+    <div v-else class="editor">
+      <nav class="slots panel">
+        <div v-if="store.screensLoading" class="loading muted"><span class="spinner" /> Reading images…</div>
+        <div class="label" :title="groups[0].hint">Startup</div>
+        <button
+          v-for="slot in STARTUP_SLOTS"
+          :key="slot"
+          class="slot-row"
+          :class="{ active: selected === slot && !playing }"
+          @click="pick(slot)"
+        >
+          <ScreenCanvas :pixels="info(slot) || dirty(slot) ? pixels(slot) : null" :scale="1" />
+          <span class="caption">
+            {{ slotName(slot) }}
+            <span v-if="dirty(slot)" class="tag">edited</span>
+            <span v-else-if="info(slot) && !info(slot)!.rows" class="tag missing">no file</span>
+          </span>
+        </button>
+
+        <div class="label" :title="groups[1].hint">Screen saver</div>
+        <button
+          class="slot-row"
+          :class="{ active: playing && group.id === 'saver' }"
+          title="Play the screen saver in the editor"
+          @click="play(SCREEN_SAVER_SLOTS)"
+        >
+          <ScreenCanvas :pixels="saverThumb" :scale="1" />
+          <span class="caption"><Icon name="play" :size="11" /> Animation</span>
+        </button>
+        <div class="nested">
           <button
-            v-for="slot in g.slots"
+            v-for="slot in SCREEN_SAVER_SLOTS"
             :key="slot"
-            class="frame"
-            :class="{ active: selected === slot, dirty: dirty(slot) }"
-            @click="selected = slot"
+            class="slot-row"
+            :class="{ active: selected === slot && !playing }"
+            @click="pick(slot)"
           >
-            <ScreenCanvas :pixels="info(slot) ? pixels(slot) : null" :scale="THUMB_SCALE" />
+            <ScreenCanvas :pixels="info(slot) || dirty(slot) ? pixels(slot) : null" :scale="1" />
             <span class="caption">
               {{ label(slot) }}
               <span v-if="dirty(slot)" class="tag">edited</span>
@@ -362,90 +417,101 @@ async function putBackOriginal() {
             </span>
           </button>
         </div>
-      </section>
-    </div>
+      </nav>
 
-    <div class="bar">
-        <span class="slot mono">{{ selected }}</span>
-        <span class="muted size">{{ WIDTH }} × {{ HEIGHT }}, black and white</span>
-        <div class="spacer" />
-        <button :class="{ active: playing }" @click="playing = !playing">
-          <Icon name="play" /> {{ playing ? "Stop" : `Play ${group.label.toLowerCase()}` }}
-        </button>
-        <label v-if="playing" class="speed">
-          <input v-model.number="speed" type="range" min="100" max="1200" step="50" />
-          <span class="mono">{{ speed }} ms</span>
-        </label>
-        <button :disabled="playing" @click="openPicker">From library…</button>
-        <button :disabled="playing" @click="saveFrame">Save frame to library</button>
-        <button :disabled="playing" @click="saveSet">Save all six as a set</button>
-      </div>
+      <section class="center">
+        <div class="bar">
+          <span class="title">{{ playing ? `${group.label} animation` : slotName(selected) }}</span>
+          <span class="muted size">{{ WIDTH }} × {{ HEIGHT }}, black and white</span>
+          <div class="spacer" />
+          <template v-if="playing">
+            <label class="speed">
+              <input v-model.number="speed" type="range" min="100" max="1200" step="50" />
+              <span class="mono">{{ speed }} ms</span>
+            </label>
+            <button @click="playing = false"><Icon name="stop" /> Stop</button>
+          </template>
+          <button v-else @click="play(group.slots)"><Icon name="play" /> Play {{ group.label.toLowerCase() }}</button>
+        </div>
 
-    <div class="work">
-      <div class="drawing">
-      <div class="stage">
-        <ScreenCanvas
-          class="board"
-          :class="{ playing, panning }"
-          :pixels="shown"
-          :scale="EDIT_SCALE"
-          @pointerdown="startStroke"
-          @pointermove="continueStroke"
-          @pointerup="endStroke"
-          @pointercancel="endStroke"
-          @wheel="onWheel"
-          @contextmenu.prevent
-        />
-        <p v-if="playing" class="muted note">
-          Preview only — the device runs the animation at its own speed.
-        </p>
+        <div class="tools">
+          <div class="tool-group">
+            <button :class="{ active: tool === 'draw' }" :disabled="playing" @click="tool = 'draw'">Draw</button>
+            <button :class="{ active: tool === 'erase' }" :disabled="playing" @click="tool = 'erase'">Erase</button>
+            <button
+              :class="{ active: tool === 'move' }"
+              :disabled="playing || !framing"
+              :title="framing ? 'Drag the loaded image to frame it' : 'Load an image to frame it'"
+              @click="tool = 'move'"
+            >
+              Move
+            </button>
+          </div>
+          <label class="field">
+            <span>Brush</span>
+            <select v-model.number="brush" :disabled="playing">
+              <option :value="1">1 px</option>
+              <option :value="2">3 px</option>
+              <option :value="3">5 px</option>
+            </select>
+          </label>
+          <div class="tool-group">
+            <button :disabled="playing" @click="invertSelected">Invert</button>
+            <button :disabled="playing" @click="clear(0)">Clear</button>
+            <button :disabled="playing" @click="clear(1)">Fill</button>
+          </div>
+          <div class="tool-group">
+            <button :disabled="playing || !(undo[selected] ?? []).length" @click="undoOne">Undo</button>
+            <button :disabled="!dirty(selected)" @click="revert">Revert</button>
+          </div>
+        </div>
+
+        <div ref="stage" class="stage">
+          <ScreenCanvas
+            class="board"
+            :class="{ playing, panning }"
+            :pixels="shown"
+            :scale="editScale"
+            @pointerdown="startStroke"
+            @pointermove="continueStroke"
+            @pointerup="endStroke"
+            @pointercancel="endStroke"
+            @wheel="onWheel"
+            @contextmenu.prevent
+          />
+        </div>
+        <p v-if="playing" class="muted note">Preview only — the device runs the animation at its own speed.</p>
         <p v-else-if="panning" class="muted note">
           Drag to move the image, scroll to zoom. Anything outside the screen is cropped off.
         </p>
         <p v-else class="muted note">Drag to draw, right-drag to erase.</p>
-      </div>
 
-      <div class="tools">
-        <div class="tool-group">
-          <button :class="{ active: tool === 'draw' }" :disabled="playing" @click="tool = 'draw'">Draw</button>
-          <button :class="{ active: tool === 'erase' }" :disabled="playing" @click="tool = 'erase'">Erase</button>
-          <button
-            :class="{ active: tool === 'move' }"
-            :disabled="playing || !framing"
-            :title="framing ? 'Drag the loaded image to frame it' : 'Load an image to frame it'"
-            @click="tool = 'move'"
-          >
-            Move
+        <div class="footer">
+          <button v-if="selectedInfo?.hasOriginal" :disabled="store.pending > 0" @click="putBackOriginal">
+            Put back the original
+          </button>
+          <p v-if="selectedInfo?.problem" class="problem">{{ selectedInfo.problem }}</p>
+          <div class="spacer" />
+          <button v-if="changed.length > 1" :disabled="store.pending > 0" @click="apply(changed)">
+            Apply {{ changed.length }} changed
+          </button>
+          <button class="primary" :disabled="!dirty(selected) || store.pending > 0" @click="apply([selected])">
+            Apply to project {{ store.status?.project }}
           </button>
         </div>
-        <label class="field">
-          <span>Brush</span>
-          <select v-model.number="brush" :disabled="playing">
-            <option :value="1">1 px</option>
-            <option :value="2">3 px</option>
-            <option :value="3">5 px</option>
-          </select>
-        </label>
-        <div class="tool-group">
-          <button :disabled="playing" @click="invertSelected">Invert</button>
-          <button :disabled="playing" @click="clear(0)">Clear</button>
-          <button :disabled="playing" @click="clear(1)">Fill</button>
-        </div>
-        <button :disabled="playing || !(undo[selected] ?? []).length" @click="undoOne">Undo</button>
-        <button :disabled="!dirty(selected)" @click="revert">Revert</button>
-      </div>
-      </div>
+      </section>
 
-      <div class="panel convert">
-        <div class="head">
-          <span class="label">From an image</span>
-          <button class="primary small" :disabled="playing" @click="fileInput?.click()">Load image…</button>
-          <input ref="fileInput" type="file" accept="image/*" hidden @change="onFile" />
-          <label class="check">
-            <input v-model="fillGroup" type="checkbox" />
-            Put it in every frame of this group
-          </label>
-        </div>
+      <aside class="side panel">
+        <div class="label">Load</div>
+        <button class="primary" :disabled="playing" @click="fileInput?.click()">Load image…</button>
+        <input ref="fileInput" type="file" accept="image/*" hidden @change="onFile" />
+        <label class="check">
+          <input v-model="fillGroup" type="checkbox" />
+          Put it in every frame of {{ group.label.toLowerCase() }}
+        </label>
+        <button :disabled="playing" @click="openPicker">From library…</button>
+
+        <div class="label">Image</div>
         <div class="fields" :class="{ off: !sources[selected] }">
           <label class="field">
             <span>Fit</span>
@@ -467,14 +533,7 @@ async function putBackOriginal() {
           </label>
           <label class="field slider">
             <span>Zoom</span>
-            <input
-              v-model.number="conversion.zoom"
-              type="range"
-              min="0.1"
-              max="8"
-              step="0.05"
-              :disabled="!sources[selected]"
-            />
+            <input v-model.number="conversion.zoom" type="range" min="0.1" max="8" step="0.05" :disabled="!sources[selected]" />
             <span class="mono">{{ conversion.zoom.toFixed(2) }}×</span>
           </label>
           <label class="field slider">
@@ -492,38 +551,24 @@ async function putBackOriginal() {
             <input v-model.number="conversion.contrast" type="range" min="-100" max="100" :disabled="!sources[selected]" />
             <span class="mono">{{ conversion.contrast }}</span>
           </label>
-          <label class="field check">
-            <input v-model="conversion.invert" type="checkbox" :disabled="!sources[selected]" />
-            <span>Invert</span>
-          </label>
-          <button class="small" :disabled="!sources[selected]" @click="resetFraming">Recentre</button>
+          <div class="field-row">
+            <label class="check">
+              <input v-model="conversion.invert" type="checkbox" :disabled="!sources[selected]" />
+              Invert
+            </label>
+            <button class="small" :disabled="!sources[selected]" @click="resetFraming">Recentre</button>
+          </div>
         </div>
         <p v-if="!sources[selected]" class="hint muted">
-          Load a PNG, JPEG, GIF, WebP or BMP to use these. Pick Move to drag the image around and
-          crop the part you want. Moving these re-converts it, replacing anything drawn by hand —
-          Undo brings it back.
+          Load a PNG, JPEG, GIF, WebP or BMP to use these. Pick Move to drag the image around and crop the part you
+          want. Changing these re-converts it, replacing anything drawn by hand — Undo brings it back.
         </p>
-      </div>
-    </div>
 
-    <div class="footer">
-        <button
-          v-if="selectedInfo?.hasOriginal"
-          :disabled="store.pending > 0"
-          @click="putBackOriginal"
-        >
-          Put back the original
-        </button>
-        <p v-if="selectedInfo?.problem" class="problem">{{ selectedInfo.problem }}</p>
-        <div class="spacer" />
-        <button v-if="changed.length > 1" :disabled="store.pending > 0" @click="apply(changed)">
-          Apply {{ changed.length }} changed
-        </button>
-        <button class="primary" :disabled="!dirty(selected) || store.pending > 0" @click="apply([selected])">
-          Apply to project {{ store.status?.project }}
-        </button>
+        <div class="label">Library</div>
+        <button :disabled="playing" @click="saveFrame">Save {{ slotName(selected).toLowerCase() }} to library</button>
+        <button @click="saveSet">Save all six as a set</button>
+      </aside>
     </div>
-    </template>
 
     <div v-if="picking" class="backdrop" @click.self="picking = false">
       <div class="picker panel" role="dialog" aria-modal="true">
@@ -623,61 +668,69 @@ async function putBackOriginal() {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 14px;
-  overflow: auto;
+  min-height: 0;
 }
 
-/* Every frame of both groups, across the top. */
-.strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+.editor {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 300px;
+  gap: 14px;
 }
 
 .loading {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.group {
-  padding: 12px;
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hint {
-  margin: 4px 0 10px;
   font-size: 12px;
 }
 
-.frames {
+/* The six images, down the left. */
+.slots {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px;
+  overflow: auto;
 }
 
-.frame {
-  padding: 5px;
-  display: block;
+.slots .label:not(:first-child) {
+  margin-top: 8px;
+}
+
+
+
+.slot-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 4px;
   border-color: var(--line);
   background: var(--panel-2);
 }
 
-.frame.active {
+.slot-row.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.nested {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
 }
 
 .caption {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 5px;
   font-size: 11px;
   color: var(--muted);
 }
@@ -690,35 +743,38 @@ async function putBackOriginal() {
   color: var(--faint);
 }
 
+/* The editor itself: title, tools, the image as large as it fits, and the actions. */
+.center {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .bar,
 .tools,
-.footer {
+.footer,
+.field-row {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.work {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
+.title {
+  font-weight: 600;
 }
 
-.drawing {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: none;
+.stage {
+  flex: 1;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
 
 .spacer {
   flex: 1;
-}
-
-.slot {
-  color: var(--accent);
 }
 
 .size {
@@ -752,8 +808,9 @@ async function putBackOriginal() {
 }
 
 .note {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 12px;
+  text-align: center;
 }
 
 button.active {
@@ -771,24 +828,26 @@ button.small {
   gap: 6px;
 }
 
-.convert {
-  flex: 1;
-  min-width: 340px;
+/* Where images come from and go to, on the right. */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px;
+  overflow: auto;
 }
 
-.convert .head {
-  flex-wrap: wrap;
-}
-
-.convert .fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 10px 18px;
+.side .label:not(:first-child) {
   margin-top: 12px;
 }
 
-.convert .fields.off {
+.side .fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side .fields.off {
   opacity: 0.55;
 }
 
@@ -803,20 +862,27 @@ button.small {
   color: var(--muted);
 }
 
-/* Line the conversion controls up in their grid; the toolbar's stay snug. */
-.convert .field > span:first-child {
+.side .field > span:first-child {
   min-width: 74px;
+}
+
+.side .field select {
+  flex: 1;
 }
 
 .field.slider input[type="range"] {
   flex: 1;
-  min-width: 90px;
+  min-width: 60px;
 }
 
 .field.slider .mono {
-  min-width: 34px;
+  min-width: 40px;
   text-align: right;
   font-size: 12px;
+}
+
+.field-row {
+  justify-content: space-between;
 }
 
 .check {
@@ -827,13 +893,14 @@ button.small {
   color: var(--muted);
 }
 
+.hint {
+  margin: 0;
+  font-size: 12px;
+}
+
 .problem {
   margin: 0;
   color: var(--danger);
   font-size: 12px;
-}
-
-.footer {
-  padding-bottom: 4px;
 }
 </style>
