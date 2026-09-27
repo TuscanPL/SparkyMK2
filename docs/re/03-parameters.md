@@ -41,7 +41,7 @@ A long message on channel `0x05`. The device echoes the same payload back.
 | `7D` | Attack | 0–127 |
 | `7E` | Hold | 1–100 |
 | `7F` | Release | 0–127 |
-| `89` | Key _(?)_ | 0 = none, 1–24 Camelot order (see "Computed on the host") |
+| `89` | Key _(?)_ | 0 = none, 1–24 Camelot order (see "Computed on the host"). Accepted, but not kept: on 5.52 the pad block does not change |
 | `8A` | Groove | 0 Off, 1–8 = 8beat <, 8beat <<, 8beat >, 8beat >>, 16beat <, 16beat <<, 16beat >, 16beat >> |
 | `8B` | Rate | signed −7..7, shown as 1–15 (0 shows as 8) |
 | `8C` | Humanize | 0 Off, 1 Low, 2 Med, 3 High |
@@ -208,7 +208,15 @@ It is probably set on the device side (the device's error list has "KEY Detect E
 - 0 = none.
 - 1–24 = Camelot order, minor ("A") before major ("B"): 1 = 1A A♭ min, 2 = 1B B maj,
   3 = 2A E♭ min, … 7 = 4A F min, … 16 = 8B C maj, … 24 = 12B E maj.
-- The app's Key control appears unused. `89` has not been exercised on the device.
+- The app's Key control appears unused. On firmware 5.52 (2026-09-27, a pad in a scratch
+  project) the device acknowledges `89` with 7 and 16, but the pad block does not change,
+  live or in `PADCONF.BIN` after switching projects, so there is nowhere to read a key
+  back from.
+
+**Pad block fields after the chop points** (mapped the same day by setting each value and
+comparing blocks; fields are little-endian u32 from byte 3): field 65 (byte 263) stays 0,
+Groove `8A` is field 66 (byte 267), Rate `8B` field 67 (byte 271, signed) and Humanize
+`8C` field 68 (byte 275). `8D` is field 69 (byte 279).
 
 **Import audio:** convert to 48 kHz 16-bit big-endian, write the SMP (02-files.md), send
 the pad block.

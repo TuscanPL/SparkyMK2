@@ -139,6 +139,9 @@ pub(crate) fn block_field(id: u8) -> Option<usize> {
         0x67..=0x7B => Some((id - 0x66) as usize),
         // After Roll there is no field for 0x7C; Attack starts one field earlier.
         0x7D..=0x7F => Some((id - 0x67) as usize),
+        // After the 16 chop points (fields 49-64): field 65 stays 0 even when Key (0x89) is
+        // set, then Groove, Rate (signed) and Humanize. Mapped on firmware 5.52.
+        0x8A..=0x8C => Some((id - 0x8A) as usize + 66),
         _ => None,
     }
 }
@@ -156,5 +159,8 @@ mod tests {
         assert_eq!(block_field(0x69), Some(3));
         assert_eq!(block_field(0x6F), Some(9));
         assert_eq!(block_field(0x7E), Some(23));
+        assert_eq!(block_field(0x8A), Some(66));
+        assert_eq!(block_field(0x8C), Some(68));
+        assert_eq!(block_field(0x89), None);
     }
 }
