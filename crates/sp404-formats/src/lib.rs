@@ -4,6 +4,7 @@ pub mod audio;
 pub mod padconf;
 pub mod pattern;
 pub mod picture;
+pub mod picture_share;
 pub mod smf;
 pub mod smp;
 pub mod wav;

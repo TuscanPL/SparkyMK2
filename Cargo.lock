@@ -3259,8 +3259,11 @@ name = "sp404-formats"
 version = "0.6.0"
 dependencies = [
  "audioadapter-buffers",
+ "base64 0.22.1",
  "hound",
  "md-5",
+ "miniz_oxide 0.8.9",
+ "png 0.18.1",
  "rubato",
  "sp404-proto",
  "symphonia",

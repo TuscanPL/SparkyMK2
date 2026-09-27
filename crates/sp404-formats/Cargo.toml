@@ -11,6 +11,9 @@ sp404-proto.workspace = true
 thiserror.workspace = true
 md-5 = "0.10"
 hound = "3.5"
+png = "0.18"
+miniz_oxide = "0.8"
+base64 = "0.22"
 rubato = { version = "4", default-features = false, features = ["fft_resampler"] }
 audioadapter-buffers = "4"
 symphonia = { version = "0.6", default-features = false, features = [
