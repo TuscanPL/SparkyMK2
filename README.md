@@ -4,7 +4,7 @@ An open-source editor and librarian for the **Roland SP-404MKII**, built for Lin
 The goal is feature parity with Roland's official SP-404MKII App (Windows/macOS): manage
 samples, pads, patterns and projects on the device over USB.
 
-![The Samples tab: pad grid, waveform with start, end and loop markers, and pad parameters](docs/screenshot.png)
+![The Samples tab: pad grid, waveform with chop points, and every pad parameter](docs/screenshots/samples.png)
 
 > Not affiliated with or endorsed by Roland Corporation. "SP-404MKII" and "Roland" are
 > trademarks of Roland Corporation.
@@ -15,63 +15,90 @@ samples, pads, patterns and projects on the device over USB.
 
 ## Status
 
-**Early, but the core works.** The USB protocol is decoded and documented, and a Rust
-core with a command-line tool (`sp404`) talks to real hardware.
+**Usable day to day.** The desktop app covers most of what the official app does, and
+adds a few things it doesn't: a file browser for the SD card, a screen image editor with
+a library, and key detection. A command-line tool, `sp404`, does the device work too.
 
-- Verified against an SP-404MKII on firmware **5.52**, from Windows and Linux.
-- A desktop app edits samples, pads and project settings, and shows patterns. A plugin
-  version comes later.
+- Verified against an SP-404MKII on firmware **5.52**, on Linux, and the protocol on
+  Windows. A user has run the app on an Apple Silicon Mac.
+- Still missing from the app: waveform zoom, the chop helpers (Auto Assign, Create Chop
+  Points, Snap to Grid), Emphasis, pattern import, and the official app's own settings
+  (language, colours, backgrounds). A plugin version comes later.
 
 Feature-by-feature progress against the official app is tracked in
 [docs/parity.md](docs/parity.md).
 
 ## What it can do
 
-**Device and projects**
-- Show status: current project, tempo settings, bank tempos, volumes and protection, free
-  space.
-- List, select, rename, Init (all, samples, patterns, or a single bank) and restore
-  projects.
-- Back up a whole project to a folder; the result is byte-identical to the official app's
-  export.
+### Samples
+
+- Import WAV, AIFF, FLAC or MP3 at any sample rate: drop files from the computer onto a
+  pad, or drag a sound off the SD card. Audio is converted to the device's 48 kHz 16-bit
+  format; mono stays mono.
+- Edit every pad parameter: start, end and loop top on the waveform, chop points, level,
+  pan, gate, loop, direction, trigger, chromatic mode, BPM and sync, time stretch, vinyl,
+  pitch, groove, rate, humanize, the envelope and routing.
+- Truncate, normalize, delete, rename; move, overwrite or exchange samples between pads by
+  dragging.
+- Preview pads on the unit, with a playhead. Pads hit on the unit are selected in the app.
+- Analyze BPM, Set BPM by Start/End, and automatic BPM detection on import, following the
+  official app's rules.
+- Detect a pad's key. The official app has no detector; the result is shown in the app,
+  as the SP-404MKII has nowhere to keep it.
+- Export a pad, a bank or a whole project as WAV files, to the SD card or the computer, and
+  restore them onto the same pads later with all their settings, gaps included.
+
+### Patterns
+
+![The Patterns tab: pattern slots, note lanes for each pad, and the export buttons](docs/screenshots/patterns.png)
+
+- See every pattern slot, and each pattern's length, tempo and notes, pad by pad.
+- Export a pattern as a MIDI file (byte-identical to the official app's), a Bounce (one
+  WAV) or MULTIPAD (a WAV per pad). The unit renders the WAVs itself.
+
+### Screens
+
+![The Screens editor: the six images down the left, the drawing canvas, and image loading options](docs/screenshots/screens-editor.png)
+
+- Edit a project's startup animation and screen saver: convert any image to the device's
+  128 × 64 black and white screen, panning and zooming to crop the part you want, or draw
+  it pixel by pixel. Preview the animations before writing them.
+- Keep frames and whole sets of six in a library: a folder of PNGs on your computer.
+
+![The Screens library: saved sets and frames, with the selected set's frames and actions](docs/screenshots/screens-library.png)
+
+- Apply a frame or a set to many projects at once, without switching the unit's project.
+- Share a frame as a line of text to paste in a chat, or a set as its PNG file.
+
+### Files
+
+![The Files tab: browsing a folder of loops on the SD card](docs/screenshots/files.png)
+
 - Browse both of the device's filesystems over USB and move files either way: its own
   storage (projects, samples, the factory library) and the SD card (`IMPORT`, `EXPORT`,
   `BKUP`). Copy folders on or off, rename, delete, make folders, at about 2 MB/s.
 - Drop sounds straight into the card's `IMPORT` folder, where the SP-404MKII's own IMPORT
   browser finds them, without taking the card out.
-- Audition anything on the device before using it: audio on the card and the device's own
-  samples, played through the computer.
+- Audition anything on the device from the computer, stepping through a folder with the
+  arrow keys.
 
-**Samples and pads**
-- Import WAV, AIFF, FLAC or MP3 at any sample rate, from the computer or by dragging a
-  sound off the SD card onto a pad. Audio is converted to the device's
-  48 kHz 16-bit format; mono stays mono.
-- Export a pad, a bank or a whole project as WAV files, to the SD card or the computer, and
-  restore them onto the same pads later with all their settings, gaps included.
-- Read and set every pad parameter: start/end, loop top, level, pitch, time stretch,
-  envelopes, chop points and more.
-- Truncate, normalize, delete, rename.
-- Move, overwrite or exchange samples between pads.
-- Preview pads, and read waveform peaks.
-- Analyze BPM, Set BPM by Start/End, and automatic BPM detection on import, following the
-  official app's rules.
-- Key detection, which the official app doesn't have.
+### Projects and settings
 
-**Display images**
-- Edit a project's startup animation and screen saver: convert any image to the device's
-  128 x 64 black and white screen, panning and zooming to crop the part you want, or draw
-  it pixel by pixel, then write it to the device.
+![The Settings tab: project name and tempo, Clear project, Back up and restore, and bank settings](docs/screenshots/settings.png)
 
-**Patterns**
-- List patterns.
-- Export a pattern as a Standard MIDI File, byte-identical to the official app's export.
-- Bounce a pattern to WAV, or render each pad separately (MULTIPAD). The device renders
-  these itself.
+- Select and rename projects; set the project and bank tempos, bank volumes and
+  protection.
+- Back up a whole project to the computer, the same files the official app exports, and
+  restore a backup into the current project.
+- Clear a project, or one bank of it: samples, patterns, screen images, settings.
 
-**Offline tools**
-- Inspect project backups (`PADCONF.BIN`, pattern files, SMP samples) without the device.
-- Convert audio to the SMP format.
-- Analyse audio files for tempo and key.
+### Command line and offline tools
+
+- `sp404` does the device work from a terminal: status, pads and parameters, import and
+  export, patterns, screens of the current project, backups, Init, and the file browser.
+  The screen library and share codes are in the app only.
+- Read project backups (`PADCONF.BIN`, pattern files, SMP samples) without the device.
+- Convert audio to the SMP format, and analyse audio files for tempo and key.
 
 ## Install
 
@@ -95,8 +122,9 @@ The Windows build is new. The protocol work and the command-line tool both come 
 Windows, but the app itself has not been tried there yet; reports are welcome. Windows
 needs no driver or extra setup: the sampler appears as a COM port, and the app finds it.
 
-The macOS build is new too, and has not been tried on a Mac yet. It is Apple Silicon
-only; on Intel, build from source. No driver or group membership is needed there: the
+The macOS build has been tried on an Apple Silicon Mac by a user (see
+[#5](https://github.com/TuscanPL/SparkyMK2/issues/5)). It is Apple Silicon only; on
+Intel, build from source. No driver or group membership is needed there: the
 sampler appears as `/dev/cu.usbmodem…` and the app finds it.
 
 ### macOS setup
@@ -262,14 +290,14 @@ welcome to it.
 
 ## Roadmap
 
-- **GUI:** a native Linux interface with the official app's workflow (pad grid, waveform
-  and chop editor, pattern view, settings).
-- **Hardware testing on Linux.**
+- **Closing the gaps with the official app:** waveform zoom, the chop helpers (Auto
+  Assign, Create Chop Points, Snap to Grid), Emphasis, the Info Mode views, pattern import,
+  and dragging pads out to the file manager.
 - **Remaining protocol gaps:**
   - Partial project imports (a single bank of samples or patterns)
   - The device message carrying the BPM detect range
-  - A few pattern commands
-  - The meaning of some status fields
+  - The firmware check and the names of the working modes
+- **Windows testing** of the app itself.
 - **Plugin build** (VST3/CLAP/LV2), later.
 
 ## Credits
@@ -278,10 +306,6 @@ The Faceplate app icon is original SP-404-inspired artwork contributed by
 [diamond-one](https://github.com/diamond-one), under the project's GPL-3.0-or-later
 license. Editable SVG sources and export details are in
 [app/src-tauri/icons/](app/src-tauri/icons/README.md).
-
-The earlier icon visible in the existing screenshot is
-[Sampler by Magnific - Flaticon](https://www.flaticon.com/free-icons/sampler),
-used under Flaticon's free license.
 
 ## License
 
