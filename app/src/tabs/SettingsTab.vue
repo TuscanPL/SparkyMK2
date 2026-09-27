@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { getVersion } from "@tauri-apps/api/app";
+import { open } from "@tauri-apps/plugin-dialog";
 import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import { PROJECT_NAME_LEN, bpm, storage } from "../format";
 import type { ClearParts } from "../api";
-import { clearProject, renameProject, savePrefs, setGlobalParam, store } from "../store";
+import { clearProject, loadLibrary, renameProject, savePrefs, setGlobalParam, setLibraryDir, store } from "../store";
 
 /** Shown so a bug report can say which version it is about. */
 const version = ref("");
 getVersion().then((v) => (version.value = v));
+
+if (!store.library.loaded && !store.library.loading) loadLibrary();
+
+async function chooseLibraryDir() {
+  const dir = await open({ directory: true, title: "Keep the screen library in", defaultPath: store.library.dir || undefined });
+  if (typeof dir === "string") await setLibraryDir(dir);
+}
 
 const locked = () => store.status?.workingMode === 4;
 
@@ -240,6 +248,33 @@ function commitVolume(letter: string, current: number) {
           </span>
         </span>
       </label>
+      <label class="pref">
+        <span class="switch">
+          <input v-model="store.prefs.collectScreens" type="checkbox" @change="savePrefs" />
+          <span />
+        </span>
+        <span>
+          Keep every display image written to the device in the screen library
+          <span class="muted hint">
+            Each image applied in the Screens tab is saved to the library too, once, so it can go to other projects
+            later.
+          </span>
+        </span>
+      </label>
+      <div class="pref library-dir">
+        <span>
+          Screen library folder
+          <span class="muted hint">
+            <span class="mono">{{ store.library.dir || "…" }}</span><br />
+            A plain folder of PNGs: 128×64 for a frame, 128×384 for a set of six. Sync it or add images from other
+            programs; the library reads it again when opened.
+          </span>
+        </span>
+        <div class="dir-buttons">
+          <button @click="chooseLibraryDir">Change…</button>
+          <button v-if="store.prefs.libraryDir" @click="setLibraryDir('')">Use the default</button>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -308,6 +343,17 @@ function commitVolume(letter: string, current: number) {
   gap: 12px;
   margin-top: 10px;
   cursor: pointer;
+}
+
+.library-dir {
+  cursor: default;
+  justify-content: space-between;
+}
+
+.dir-buttons {
+  display: flex;
+  gap: 8px;
+  flex: none;
 }
 
 .pref .hint {

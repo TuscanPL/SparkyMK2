@@ -5,6 +5,7 @@ import {
   errorText,
   type CardEntry,
   type ClearParts,
+  type LibraryItem,
   type CardListing,
   type Volume,
   type Pad,
@@ -36,6 +37,10 @@ interface Dialog {
   title: string;
   message: string;
   buttons: DialogButton[];
+  /** Text typed into the dialog, when it asks for some; see `promptText`. */
+  input?: string;
+  /** A box for long text such as a share code, rather than a one-line name field. */
+  multiline?: boolean;
   resolve: (value: string | null) => void;
 }
 
@@ -64,8 +69,18 @@ export const store = reactive({
   padsLoading: false,
   patternsLoading: false,
   screensLoading: false,
+  /** The screen library, read from its folder on the computer. */
+  library: {
+    dir: "",
+    items: [] as LibraryItem[],
+    skipped: [] as string[],
+    loading: false,
+    loaded: false,
+  },
   switchingProject: false,
   tab: "samples" as Tab,
+  /** Which half of the Screens tab is showing. */
+  screensMode: "editor" as "editor" | "library",
   bank: 0,
   selectedPad: null as number | null,
   /** The pad sounding on the device, from a hit on the unit or a preview, or null. */
@@ -88,6 +103,10 @@ export const store = reactive({
     /** Fetch every sound in a folder as it opens, trading a slower open for instant browsing. */
     preloadFolders: savedPrefs.preloadFolders ?? false,
     bpmRange: savedPrefs.bpmRange ?? 0,
+    /** The screen library's folder; empty means the default, in Documents. */
+    libraryDir: savedPrefs.libraryDir ?? "",
+    /** Keep a copy of every display image written to the device in the library. */
+    collectScreens: savedPrefs.collectScreens ?? true,
   },
   toasts: [] as Toast[],
 });
@@ -125,6 +144,33 @@ export function ask(title: string, message: string, buttons: DialogButton[]): Pr
   return new Promise((resolve) => {
     store.dialog = { title, message, buttons, resolve };
   });
+}
+
+/** Ask for a line of text; resolves with it, trimmed, or null when cancelled or empty. */
+export async function promptText(
+  title: string,
+  message: string,
+  initial: string,
+  action: string,
+  multiline = false,
+): Promise<string | null> {
+  const dialog: Dialog = {
+    title,
+    message,
+    input: initial,
+    multiline,
+    buttons: [
+      { label: "Cancel", value: "cancel" },
+      { label: action, value: "ok", kind: "primary" },
+    ],
+    resolve: () => {},
+  };
+  const answer = await new Promise<string | null>((resolve) => {
+    dialog.resolve = resolve;
+    store.dialog = dialog;
+  });
+  const text = dialog.input?.trim() ?? "";
+  return answer === "ok" && text ? text : null;
 }
 
 export function closeDialog(value: string | null) {
@@ -382,6 +428,7 @@ export async function applyScreen(slot: string, rows: number[]): Promise<boolean
   store.pending++;
   try {
     replaceScreen(await api.setScreen(slot, rows));
+    if (store.prefs.collectScreens && store.status) collectScreen(store.status.project, slot, rows);
     return true;
   } catch (e) {
     handleError(e);
@@ -409,6 +456,162 @@ function replaceScreen(screen: ScreenImage) {
   const i = store.screens.findIndex((s) => s.slot === screen.slot);
   if (i >= 0) store.screens[i] = screen;
   else store.screens.push(screen);
+}
+
+// ---- screen library ----
+
+/** Name a slot for people: "startup_2" → "Startup 2", "screen_saver_1" → "Screen saver 1". */
+export function slotName(slot: string): string {
+  const [kind, n] = [slot.slice(0, slot.lastIndexOf("_")), slot.slice(slot.lastIndexOf("_") + 1)];
+  return `${kind === "startup" ? "Startup" : "Screen saver"} ${n}`;
+}
+
+export function projectName(project: number): string {
+  const name = store.projects[project - 1];
+  return name && name !== "-" ? name : `Project ${String(project).padStart(2, "0")}`;
+}
+
+async function libraryDir(): Promise<string> {
+  if (store.prefs.libraryDir) return store.prefs.libraryDir;
+  return (store.library.dir ||= await api.libraryDefaultDir());
+}
+
+export async function loadLibrary() {
+  store.library.loading = true;
+  try {
+    const library = await api.libraryList(await libraryDir());
+    store.library.dir = library.dir;
+    store.library.items = library.items;
+    store.library.skipped = library.skipped;
+    store.library.loaded = true;
+  } catch (e) {
+    notify(errorText(e));
+  } finally {
+    store.library.loading = false;
+  }
+}
+
+/** Point the library at another folder, or back at the default with "". */
+export async function setLibraryDir(dir: string) {
+  store.prefs.libraryDir = dir;
+  savePrefs();
+  store.library.dir = "";
+  await loadLibrary();
+}
+
+function addToLibrary(item: LibraryItem) {
+  const items = store.library.items.filter((i) => i.name !== item.name).concat([item]);
+  store.library.items = items.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+}
+
+/** Save a frame (one entry in `frames`) or a set (six) under a name; returns the entry. */
+export async function saveToLibrary(name: string, frames: number[][]): Promise<LibraryItem | null> {
+  try {
+    const item = await api.librarySave(await libraryDir(), name, frames);
+    addToLibrary(item);
+    notify(`Saved "${item.name}" to the library`, "info");
+    return item;
+  } catch (e) {
+    notify(errorText(e));
+    return null;
+  }
+}
+
+/** Keep a copy of an image that went to the device, unless the library has it already. */
+async function collectScreen(project: number, slot: string, rows: number[]) {
+  try {
+    const item = await api.libraryCollect(await libraryDir(), `${projectName(project)} – ${slotName(slot)}`, rows);
+    if (item) addToLibrary(item);
+  } catch (e) {
+    // The image is on the device either way; the library copy is a convenience.
+    console.warn("library copy failed", e);
+  }
+}
+
+export async function renameLibraryItem(item: LibraryItem, to: string): Promise<LibraryItem | null> {
+  try {
+    const renamed = await api.libraryRename(await libraryDir(), item.name, to);
+    store.library.items = store.library.items.filter((i) => i.name !== item.name);
+    addToLibrary(renamed);
+    return renamed;
+  } catch (e) {
+    notify(errorText(e));
+    return null;
+  }
+}
+
+export async function deleteLibraryItem(item: LibraryItem): Promise<boolean> {
+  const answer = await ask(
+    `Delete "${item.name}"?`,
+    `The ${item.kind} is removed from the library folder. Projects that already show it keep it.`,
+    [
+      { label: "Cancel", value: "cancel" },
+      { label: "Delete", value: "ok", kind: "danger" },
+    ],
+  );
+  if (answer !== "ok") return false;
+  try {
+    await api.libraryDelete(await libraryDir(), item.name);
+    store.library.items = store.library.items.filter((i) => i.name !== item.name);
+    return true;
+  } catch (e) {
+    notify(errorText(e));
+    return false;
+  }
+}
+
+/** Add PNG and BMP files from the computer. */
+export async function importToLibrary(paths: string[]) {
+  try {
+    const [added, refused] = await api.libraryImport(await libraryDir(), paths);
+    added.forEach(addToLibrary);
+    if (added.length) notify(`Added ${added.length === 1 ? `"${added[0].name}"` : `${added.length} entries`} to the library`, "info");
+    for (const why of refused) notify(why);
+  } catch (e) {
+    notify(errorText(e));
+  }
+}
+
+export async function exportLibraryItem(item: LibraryItem, to: string) {
+  try {
+    await api.libraryExport(await libraryDir(), item.name, to);
+    notify(`Saved ${to}`, "info");
+  } catch (e) {
+    notify(errorText(e));
+  }
+}
+
+/**
+ * Write images to several projects without selecting them. `frames[i]` goes to `slots[i]`.
+ * Returns the projects that failed, with the reason.
+ */
+export async function applyToProjects(
+  projects: number[],
+  slots: string[],
+  frames: number[][],
+  progress: (done: number) => void,
+): Promise<[number, string][]> {
+  const failed: [number, string][] = [];
+  store.pending++;
+  try {
+    for (const [i, project] of projects.entries()) {
+      try {
+        await api.applyScreens(project, slots, frames);
+      } catch (e) {
+        const text = errorText(e);
+        if (text.includes("connection to the SP-404MKII was lost") || text === "not connected") {
+          handleError(e);
+          break;
+        }
+        failed.push([project, text]);
+      }
+      progress(i + 1);
+    }
+  } finally {
+    store.pending--;
+  }
+  if (store.connected && store.status && projects.includes(store.status.project)) await loadScreens();
+  return failed;
 }
 
 export async function refresh() {

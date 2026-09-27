@@ -5,6 +5,20 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- A screen library, in the Screens tab's new Library view: display images kept in a folder
+  on the computer (`~/Documents/SparkyMK2/Screens` unless another is picked in Settings),
+  as PNGs you can also open, sync or add to outside the app. An entry is a single frame
+  or a set of all six. Every image applied in the editor lands there once by itself, and
+  a frame or a whole project's six can be saved by name. ([#4])
+- Apply a frame or a set from the library to many projects at once. The images go straight
+  into each project's folder, so the unit stays on the project it is on, and the images
+  they replace are kept on the computer. ([#4])
+- Share a frame as a share code, a line of text to paste into a chat; Paste share code…
+  picks it out of a whole message. Sets are shared as their PNG file, which Add files…
+  takes back, along with card BMPs. ([#4])
+
 ### Fixed
 
 - Disconnecting, switching to another port or quitting the app sends MKII EXIT, so the
@@ -66,6 +80,7 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 [#1]: https://github.com/TuscanPL/SparkyMK2/pull/1
 [#2]: https://github.com/TuscanPL/SparkyMK2/issues/2
 [#3]: https://github.com/TuscanPL/SparkyMK2/issues/3
+[#4]: https://github.com/TuscanPL/SparkyMK2/issues/4
 [#5]: https://github.com/TuscanPL/SparkyMK2/issues/5
 [#6]: https://github.com/TuscanPL/SparkyMK2/issues/6
 [#7]: https://github.com/TuscanPL/SparkyMK2/issues/7

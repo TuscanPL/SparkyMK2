@@ -102,7 +102,9 @@ where SparkyMK2 stands on each.
 |---|---|---|
 | Read `PICTURE/*.bmp` of the current project | ✅ file API | ✅ |
 | Replace a startup or screen saver frame | ✅ plain file write; no reload needed | ✅ from an image (pan and zoom) or drawn by hand |
-| Apply a screen to several projects at once | ✅ | ❌ requested in #4 |
+| Apply a frame or a set to several projects at once | ✅ plain file writes into each project's `PICTURE/`; verified on hardware for a project that is not current | ✅ |
+| Screen library: frames and sets kept on the computer | host-side, a folder of PNGs | ✅ |
+| Share a frame as text | host-side share code (`sparky1:`, zlib + base64url) | ✅ sets go as their PNG file |
 
 ## App settings (local only)
 

@@ -2,7 +2,8 @@
 import { computed, onUnmounted, reactive, ref, shallowReactive, watch } from "vue";
 import Icon from "../components/Icon.vue";
 import ScreenCanvas from "../components/ScreenCanvas.vue";
-import { errorText } from "../api";
+import ScreenLibrary from "../components/ScreenLibrary.vue";
+import { errorText, type LibraryItem } from "../api";
 import {
   DEFAULT_CONVERSION,
   DEFAULT_FRAMING,
@@ -19,7 +20,17 @@ import {
   unpack,
   type Pixels,
 } from "../screens";
-import { applyScreen, notify, restoreScreen, store } from "../store";
+import {
+  applyScreen,
+  loadLibrary,
+  notify,
+  projectName,
+  promptText,
+  restoreScreen,
+  saveToLibrary,
+  slotName,
+  store,
+} from "../store";
 
 const EDIT_SCALE = 4;
 const THUMB_SCALE = 2;
@@ -266,6 +277,48 @@ async function apply(slots: string[]) {
   );
 }
 
+// ---- the library ----
+
+const ALL_SLOTS = [...STARTUP_SLOTS, ...SCREEN_SAVER_SLOTS];
+const picking = ref(false);
+
+/** Load a library entry as edits: a frame into the selected slot, a set into all six. */
+function openInEditor(item: LibraryItem) {
+  const targets = item.kind === "set" ? ALL_SLOTS : [selected.value];
+  targets.forEach((slot, i) => {
+    pushUndo(slot);
+    delete sources[slot];
+    edits[slot] = unpack(item.frames[i]);
+  });
+  playing.value = false;
+  picking.value = false;
+  store.screensMode = "editor";
+  notify(`"${item.name}" loaded; Apply writes it to project ${store.status?.project}`, "info");
+}
+
+function openPicker() {
+  if (!store.library.loaded && !store.library.loading) loadLibrary();
+  picking.value = true;
+}
+
+async function saveFrame() {
+  const slot = selected.value;
+  const project = store.status?.project ?? 0;
+  const name = await promptText("Save to the library", "Name the frame.", `${projectName(project)} – ${slotName(slot)}`, "Save");
+  if (name) await saveToLibrary(name, [pack(pixels(slot))]);
+}
+
+async function saveSet() {
+  const project = store.status?.project ?? 0;
+  const name = await promptText(
+    "Save all six as a set",
+    "The two startup frames and the four screen saver frames, as they are in the editor now, go to the library together.",
+    projectName(project),
+    "Save",
+  );
+  if (name) await saveToLibrary(name, ALL_SLOTS.map((slot) => pack(pixels(slot))));
+}
+
 async function putBackOriginal() {
   if (await restoreScreen(selected.value)) {
     forget(selected.value);
@@ -276,6 +329,15 @@ async function putBackOriginal() {
 
 <template>
   <div class="screens">
+    <div class="modes">
+      <button :class="{ active: store.screensMode === 'editor' }" @click="store.screensMode = 'editor'">Editor</button>
+      <button :class="{ active: store.screensMode === 'library' }" @click="store.screensMode = 'library'">
+        Library
+        <span v-if="store.library.loaded" class="muted">{{ store.library.items.length }}</span>
+      </button>
+    </div>
+    <ScreenLibrary v-if="store.screensMode === 'library'" @edit="openInEditor" />
+    <template v-else>
     <div class="strip">
       <div v-if="store.screensLoading" class="loading muted"><span class="spinner" /> Reading images…</div>
       <section v-for="g in groups" :key="g.id" class="panel group">
@@ -314,6 +376,9 @@ async function putBackOriginal() {
           <input v-model.number="speed" type="range" min="100" max="1200" step="50" />
           <span class="mono">{{ speed }} ms</span>
         </label>
+        <button :disabled="playing" @click="openPicker">From library…</button>
+        <button :disabled="playing" @click="saveFrame">Save frame to library</button>
+        <button :disabled="playing" @click="saveSet">Save all six as a set</button>
       </div>
 
     <div class="work">
@@ -458,10 +523,102 @@ async function putBackOriginal() {
           Apply to project {{ store.status?.project }}
         </button>
     </div>
+    </template>
+
+    <div v-if="picking" class="backdrop" @click.self="picking = false">
+      <div class="picker panel" role="dialog" aria-modal="true">
+        <h2>From the library</h2>
+        <p class="muted">
+          A frame goes into {{ slotName(selected) }}; a set fills all six. Nothing is written until you apply.
+        </p>
+        <div v-if="store.library.loading" class="muted"><span class="spinner" /> Reading the library…</div>
+        <p v-else-if="!store.library.items.length" class="muted">The library is empty.</p>
+        <div class="choices">
+          <button v-for="item in store.library.items" :key="item.path" class="choice" @click="openInEditor(item)">
+            <ScreenCanvas :pixels="unpack(item.frames[item.kind === 'set' ? 2 : 0])" :scale="1" />
+            <span class="name">{{ item.name }}</span>
+            <span v-if="item.kind === 'set'" class="tag">set</span>
+          </button>
+        </div>
+        <div class="picker-buttons">
+          <button @click="picking = false">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.modes {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.modes button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 6, 8, 0.6);
+}
+
+.picker {
+  width: min(760px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.picker h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.picker p {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow: auto;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px;
+  background: var(--panel-2);
+}
+
+.choice .name {
+  max-width: 128px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
 .screens {
   height: 100%;
   display: flex;

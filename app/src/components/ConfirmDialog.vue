@@ -7,6 +7,14 @@ function onKey(e: KeyboardEvent) {
 }
 onMounted(() => window.addEventListener("keydown", onKey));
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
+
+/** Focus the text field as the dialog opens, with its text selected for replacing. */
+const vFocus = {
+  mounted: (el: HTMLInputElement | HTMLTextAreaElement) => {
+    el.focus();
+    el.select();
+  },
+};
 </script>
 
 <template>
@@ -14,6 +22,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     <div class="dialog panel" role="dialog" aria-modal="true">
       <h2>{{ store.dialog.title }}</h2>
       <p>{{ store.dialog.message }}</p>
+      <textarea
+        v-if="store.dialog.input !== undefined && store.dialog.multiline"
+        v-model="store.dialog.input"
+        v-focus
+        class="text long mono"
+        spellcheck="false"
+      />
+      <input
+        v-else-if="store.dialog.input !== undefined"
+        v-model="store.dialog.input"
+        v-focus
+        class="text"
+        maxlength="80"
+        @keydown.enter="closeDialog('ok')"
+      />
       <div class="buttons">
         <button
           v-for="b in store.dialog.buttons"
@@ -52,6 +75,18 @@ h2 {
 p {
   margin: 0;
   color: var(--muted);
+}
+
+.text {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.text.long {
+  height: 120px;
+  resize: vertical;
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .buttons {

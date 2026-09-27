@@ -204,6 +204,22 @@ export interface ScreenImages {
   slots: ScreenImage[];
 }
 
+/** An entry of the screen library: one frame, or a set of all six. */
+export interface LibraryItem {
+  name: string;
+  kind: "frame" | "set";
+  /** Packed rows per frame: 1 for a frame; startup 1–2 then screen saver 1–4 for a set. */
+  frames: number[][];
+  path: string;
+}
+
+export interface Library {
+  dir: string;
+  items: LibraryItem[];
+  /** Files in the folder that are not library entries, with the reason. */
+  skipped: string[];
+}
+
 export type PadOperation = "truncate" | "normalize" | "delete";
 
 export const api = {
@@ -250,6 +266,21 @@ export const api = {
   clearProject: (project: number, parts: ClearParts) => invoke<Status>("clear_project", { project, ...parts }),
   setScreen: (slot: string, rows: number[]) => invoke<ScreenImage>("set_screen", { slot, rows }),
   restoreScreen: (slot: string) => invoke<ScreenImage>("restore_screen", { slot }),
+  applyScreens: (project: number, slots: string[], frames: number[][]) =>
+    invoke<void>("apply_screens", { project, slots, frames }),
+  libraryDefaultDir: () => invoke<string>("library_default_dir"),
+  libraryList: (dir: string) => invoke<Library>("library_list", { dir }),
+  librarySave: (dir: string, name: string, frames: number[][]) =>
+    invoke<LibraryItem>("library_save", { dir, name, frames }),
+  libraryCollect: (dir: string, name: string, rows: number[]) =>
+    invoke<LibraryItem | null>("library_collect", { dir, name, rows }),
+  libraryRename: (dir: string, name: string, to: string) => invoke<LibraryItem>("library_rename", { dir, name, to }),
+  libraryDelete: (dir: string, name: string) => invoke<void>("library_delete", { dir, name }),
+  libraryImport: (dir: string, paths: string[]) =>
+    invoke<[LibraryItem[], string[]]>("library_import", { dir, paths }),
+  libraryExport: (dir: string, name: string, to: string) => invoke<void>("library_export", { dir, name, to }),
+  shareCode: (rows: number[]) => invoke<string>("share_code", { rows }),
+  readShareCode: (text: string) => invoke<number[]>("read_share_code", { text }),
   downloadFile: (volume: Volume, remote: string, local: string) =>
     invoke<number>("download_file", { volume, remote, local }),
   downloadFolder: (volume: Volume, remote: string, local: string) =>
