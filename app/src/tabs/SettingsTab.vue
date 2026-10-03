@@ -6,7 +6,7 @@ import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import { BANK_LETTERS, PROJECT_NAME_LEN, bpm, storage } from "../format";
 import { backupProject, restoreBackup } from "../exporting";
-import type { ClearParts } from "../api";
+import { api, errorText, setLoggingActive, type ClearParts, type LoggingState } from "../api";
 import { clearProject, loadLibrary, renameProject, savePrefs, setGlobalParam, setLibraryDir, store } from "../store";
 
 /** Shown so a bug report can say which version it is about. */
@@ -18,6 +18,30 @@ if (!store.library.loaded && !store.library.loading) loadLibrary();
 async function chooseLibraryDir() {
   const dir = await open({ directory: true, title: "Keep the screen library in", defaultPath: store.library.dir || undefined });
   if (typeof dir === "string") await setLibraryDir(dir);
+}
+
+/** The diagnostic log, for sending in with a bug report. */
+const logState = ref<LoggingState | null>(null);
+const logError = ref("");
+api.loggingState().then((s) => (logState.value = s));
+
+async function toggleLogging(on: boolean) {
+  logError.value = "";
+  try {
+    logState.value = await api.setLogging(on);
+    setLoggingActive(logState.value.enabled);
+  } catch (e) {
+    logError.value = errorText(e);
+  }
+}
+
+async function openLogFolder() {
+  logError.value = "";
+  try {
+    await api.openLogFolder();
+  } catch (e) {
+    logError.value = errorText(e);
+  }
 }
 
 const locked = () => store.status?.workingMode === 4;
@@ -306,6 +330,36 @@ function commitVolume(letter: string, current: number) {
           <button v-if="store.prefs.libraryDir" @click="setLibraryDir('')">Use the default</button>
         </div>
       </div>
+      <label class="pref">
+        <span class="switch">
+          <input
+            :checked="logState?.enabled ?? false"
+            :disabled="!logState"
+            type="checkbox"
+            @change="toggleLogging(($event.target as HTMLInputElement).checked)"
+          />
+          <span />
+        </span>
+        <span>
+          Write a diagnostic log
+          <span class="muted hint">
+            Records everything the app does and how the SP-404MKII answers, to send in with a bug report. It stays on
+            until you turn it off, and each start of the app begins a new file; the last 10 are kept.
+          </span>
+        </span>
+      </label>
+      <div class="pref library-dir">
+        <span>
+          Log folder
+          <span class="muted hint">
+            <span class="mono">{{ logState?.file ?? logState?.folder ?? "…" }}</span>
+            <span v-if="logError" class="log-error"><br />{{ logError }}</span>
+          </span>
+        </span>
+        <div class="dir-buttons">
+          <button @click="openLogFolder">Open log folder</button>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -402,6 +456,10 @@ function commitVolume(letter: string, current: number) {
 .library-dir {
   cursor: default;
   justify-content: space-between;
+}
+
+.log-error {
+  color: var(--danger, #e5534b);
 }
 
 .dir-buttons {

@@ -5,6 +5,13 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- A diagnostic log, turned on in Settings: every command the app runs, its result and
+  timing, the device requests behind it and any error, written to a file to send in with
+  a bug report. Open log folder shows where it is. It stays on across starts, with a new
+  file each start and the last 10 kept.
+
 ### Fixed
 
 - Writes to the card wait up to 20 seconds for the unit to finish storing a file, rather

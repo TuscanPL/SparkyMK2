@@ -1,5 +1,45 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/commands.rs.
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
+/** Whether the diagnostic log is on; while it is, every command goes into it. */
+let logging = false;
+
+export function setLoggingActive(on: boolean) {
+  logging = on;
+}
+
+/** Add a line to the diagnostic log, if it is on. */
+export function logLine(level: "debug" | "info" | "warn" | "error", message: string) {
+  if (logging) tauriInvoke("log_ui", { level, message }).catch(() => {});
+}
+
+/** A value shortened for the log: long lists, text and binary data become their size. */
+function brief(value: unknown): string {
+  if (value === undefined) return "";
+  const text = JSON.stringify(value, (_key, v) => {
+    if (v instanceof ArrayBuffer) return `<${v.byteLength} bytes>`;
+    if (ArrayBuffer.isView(v)) return `<${v.byteLength} bytes>`;
+    if (Array.isArray(v) && v.length > 16) return `[${v.length} items]`;
+    if (typeof v === "string" && v.length > 200) return `${v.slice(0, 200)}… (${v.length} chars)`;
+    return v;
+  });
+  return text === undefined ? "" : text.length > 600 ? `${text.slice(0, 600)}…` : text;
+}
+
+/** `invoke`, writing the command, its arguments, result and time to the log when it is on. */
+async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  if (!logging) return tauriInvoke<T>(command, args);
+  const started = performance.now();
+  logLine("debug", `→ ${command} ${brief(args)}`);
+  try {
+    const result = await tauriInvoke<T>(command, args);
+    logLine("debug", `← ${command} ok in ${Math.round(performance.now() - started)} ms ${brief(result)}`);
+    return result;
+  } catch (e) {
+    logLine("error", `✗ ${command} failed in ${Math.round(performance.now() - started)} ms: ${errorText(e)}`);
+    throw e;
+  }
+}
 
 export interface PortInfo {
   name: string;
@@ -243,7 +283,17 @@ export interface KeyResult {
 
 export type PadOperation = "truncate" | "normalize" | "delete";
 
+export interface LoggingState {
+  enabled: boolean;
+  folder: string;
+  /** The file being written now, while logging is on. */
+  file: string | null;
+}
+
 export const api = {
+  loggingState: () => tauriInvoke<LoggingState>("logging_state"),
+  setLogging: (enabled: boolean) => tauriInvoke<LoggingState>("set_logging", { enabled }),
+  openLogFolder: () => tauriInvoke<void>("open_log_folder"),
   listPorts: () => invoke<PortInfo[]>("list_ports"),
   connect: (port: string | null) => invoke<string>("connect", { port }),
   disconnect: () => invoke<void>("disconnect"),

@@ -5,6 +5,7 @@ mod edit;
 mod export;
 mod files;
 mod library;
+mod logging;
 mod screens;
 
 use std::sync::{Arc, Mutex};
@@ -41,6 +42,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .setup(|app| {
+            logging::init(app.handle());
+            log::info!("SparkyMK2 {} started", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::list_ports,
             commands::connect,
@@ -99,11 +105,16 @@ pub fn run() {
             library::library_export,
             library::share_code,
             library::read_share_code,
+            logging::logging_state,
+            logging::set_logging,
+            logging::log_ui,
+            logging::open_log_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SparkyMK2")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                log::info!("quitting");
                 app.state::<AppState>().close(false);
             }
         });

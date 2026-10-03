@@ -115,7 +115,8 @@ impl Device {
         let mut port = serialport::new(port_name, BAUD)
             .flow_control(serialport::FlowControl::None)
             .timeout(READ_TIMEOUT)
-            .open()?;
+            .open()
+            .inspect_err(|e| log::warn!("open {port_name}: {e}"))?;
         // The official app asserts both lines (control line state 0x0003) and pauses before
         // its first message; the control channel does not answer otherwise.
         port.write_request_to_send(true)?;
@@ -209,8 +210,13 @@ impl Device {
         while let Ok(m) = inbox.rx.try_recv() {
             push_event(&mut inbox.events, m);
         }
+        let started = Instant::now();
         self.send(msg)?;
-        Self::wait(&mut inbox, what, timeout, &mut matches)
+        let reply = Self::wait(&mut inbox, what, timeout, &mut matches);
+        if reply.is_ok() {
+            log::debug!("{what}: {} ms", started.elapsed().as_millis());
+        }
+        reply
     }
 
     fn wait(
@@ -225,8 +231,14 @@ impl Device {
             match inbox.rx.recv_timeout(left) {
                 Ok(m) if matches(&m) => return Ok(m),
                 Ok(m) => push_event(&mut inbox.events, m),
-                Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(what.to_string())),
-                Err(RecvTimeoutError::Disconnected) => return Err(Error::Closed),
+                Err(RecvTimeoutError::Timeout) => {
+                    log::warn!("{what}: no reply within {} s", timeout.as_secs_f32());
+                    return Err(Error::Timeout(what.to_string()));
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    log::warn!("{what}: the serial port closed");
+                    return Err(Error::Closed);
+                }
             }
         }
     }
@@ -251,6 +263,11 @@ impl Device {
 
     /// Send without waiting for a reply.
     fn fire(&self, msg: &Message) -> Result<()> {
+        log::debug!(
+            "send ch{:02x} {}",
+            msg.channel.to_byte(),
+            hex_preview(msg.payload())
+        );
         let _inbox = self.inbox.lock().unwrap();
         self.send(msg)
     }

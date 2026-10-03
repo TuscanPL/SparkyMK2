@@ -1,6 +1,6 @@
 //! Remote file API on the device's SD card (channel 6).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use sp404_proto::fileapi::{self, Reply};
 use sp404_proto::{Channel, Message};
@@ -145,33 +145,44 @@ impl Device {
     ) -> Result<()> {
         let total = data.len() as u64;
         let mut done = 0u64;
-        let chunks: Vec<&[u8]> = data.chunks(fileapi::CHUNK).collect();
-        for batch in chunks.chunks(fileapi::WRITE_BATCH) {
-            let expected: usize = batch.iter().map(|c| c.len()).sum();
-            let mut inbox = self.inbox.lock().unwrap();
-            for (i, chunk) in batch.iter().enumerate() {
-                let last = i + 1 == batch.len();
-                self.send(&Message::long(
-                    Channel::File,
-                    fileapi::write(handle, chunk, last),
-                ))?;
-            }
-            let reply = Self::wait(&mut inbox, "write", TIMEOUT, &mut |m: &Message| {
-                is_channel(m, Channel::File) && !m.is_short()
-            })?;
-            match fileapi::parse_reply(reply.payload())? {
-                Reply::Status { result, .. } if result as usize == expected => {}
-                Reply::Status { result, .. } => {
-                    return Err(Error::Refused(format!(
-                        "write ({result} of {expected} bytes accepted)"
-                    )));
+        let started = Instant::now();
+        let result = (|| -> Result<()> {
+            let chunks: Vec<&[u8]> = data.chunks(fileapi::CHUNK).collect();
+            for batch in chunks.chunks(fileapi::WRITE_BATCH) {
+                let expected: usize = batch.iter().map(|c| c.len()).sum();
+                let mut inbox = self.inbox.lock().unwrap();
+                for (i, chunk) in batch.iter().enumerate() {
+                    let last = i + 1 == batch.len();
+                    self.send(&Message::long(
+                        Channel::File,
+                        fileapi::write(handle, chunk, last),
+                    ))?;
                 }
-                Reply::Data { .. } => return Err(Error::Unexpected("write".into())),
+                let reply = Self::wait(&mut inbox, "write", TIMEOUT, &mut |m: &Message| {
+                    is_channel(m, Channel::File) && !m.is_short()
+                })?;
+                match fileapi::parse_reply(reply.payload())? {
+                    Reply::Status { result, .. } if result as usize == expected => {}
+                    Reply::Status { result, .. } => {
+                        return Err(Error::Refused(format!(
+                            "write ({result} of {expected} bytes accepted)"
+                        )));
+                    }
+                    Reply::Data { .. } => return Err(Error::Unexpected("write".into())),
+                }
+                done += expected as u64;
+                progress(done, total);
             }
-            done += expected as u64;
-            progress(done, total);
+            Ok(())
+        })();
+        let ms = started.elapsed().as_millis();
+        match &result {
+            Ok(()) => log::debug!("write handle {handle}: {total} bytes in {ms} ms"),
+            Err(e) => log::warn!(
+                "write handle {handle}: failed at {done} of {total} bytes after {ms} ms: {e}"
+            ),
         }
-        Ok(())
+        result
     }
 
     /// Read a whole file.
@@ -201,6 +212,10 @@ impl Device {
             Ok(out)
         })();
         let closed = self.close_file(handle);
+        match &result {
+            Ok(data) => log::debug!("read {path}: {} bytes", data.len()),
+            Err(e) => log::warn!("read {path}: {e}"),
+        }
         let data = result?;
         closed?;
         Ok(data)
