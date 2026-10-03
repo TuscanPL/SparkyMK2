@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-03
+
 ### Added
 
 - A diagnostic log, turned on in Settings: every command the app runs, its result and
