@@ -563,7 +563,7 @@ impl Device {
                 self.seek(handle, 0)?;
                 self.write(handle, &smp[..header_len])
             })();
-            self.close_file(handle)?;
+            self.close_written(handle)?;
             written?;
 
             let size = self.stat(&path)?.map(|s| s.size).unwrap_or(0);

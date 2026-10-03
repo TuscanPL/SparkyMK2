@@ -21,12 +21,17 @@ pub struct AppState {
 
 impl AppState {
     /// Let go of the device, sending MKII EXIT first so it leaves its remote screen rather
-    /// than staying on it after the app is gone. Blocks until any request in flight is done.
-    fn close(&self) {
+    /// than staying on it after the app is gone. With `wait`, a running operation finishes
+    /// first; without (quitting), MKII EXIT is skipped rather than holding the app open.
+    fn close(&self, wait: bool) {
         let device = self.device.lock().unwrap().take();
         if let Some(device) = device {
             // The port may already be gone (unplugged); closing it is all that is left then.
-            let _ = device.mkii_exit();
+            if wait {
+                let _ = device.exclusive(|d| d.mkii_exit());
+            } else {
+                let _ = device.try_exclusive(|d| d.mkii_exit());
+            }
         }
     }
 }
@@ -99,7 +104,7 @@ pub fn run() {
         .expect("error while building SparkyMK2")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
-                app.state::<AppState>().close();
+                app.state::<AppState>().close(false);
             }
         });
 }

@@ -5,6 +5,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Fixed
+
+- Writes to the card wait up to 20 seconds for the unit to finish storing a file, rather
+  than failing after 5, and the app runs one device operation at a time, so a status
+  poll no longer lands in the middle of an import or a restore.
+
 ## [0.7.1] - 2026-09-27
 
 ### Fixed

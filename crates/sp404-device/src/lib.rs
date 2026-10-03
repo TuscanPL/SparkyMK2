@@ -98,6 +98,8 @@ pub struct Device {
     port_name: String,
     writer: Mutex<Box<dyn SerialPort>>,
     inbox: Mutex<Inbox>,
+    /// Held for a whole multi-step operation; see [`Device::exclusive`].
+    operation: Mutex<()>,
     stop: Arc<AtomicBool>,
     reader: Option<JoinHandle<()>>,
 }
@@ -136,9 +138,30 @@ impl Device {
                 rx,
                 events: VecDeque::new(),
             }),
+            operation: Mutex::new(()),
             stop,
             reader: Some(reader),
         })
+    }
+
+    /// Run `f` with no other `exclusive` caller in between. Each request is already
+    /// atomic, but an import, a restore or a render is many of them, and a status poll
+    /// landing in the middle of one is traffic the official app never sends there. A
+    /// program that talks to the device from several threads should wrap each whole
+    /// operation in this.
+    pub fn exclusive<T>(&self, f: impl FnOnce(&Self) -> T) -> T {
+        let _held = self.operation.lock().unwrap_or_else(|e| e.into_inner());
+        f(self)
+    }
+
+    /// Like [`Device::exclusive`], but `None` at once if another operation is running.
+    pub fn try_exclusive<T>(&self, f: impl FnOnce(&Self) -> T) -> Option<T> {
+        let _held = match self.operation.try_lock() {
+            Ok(held) => held,
+            Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return None,
+        };
+        Some(f(self))
     }
 
     pub fn port_name(&self) -> &str {

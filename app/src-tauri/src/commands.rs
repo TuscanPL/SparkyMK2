@@ -39,7 +39,7 @@ impl From<String> for Failure {
     }
 }
 
-/// Run `f` with the open device on the blocking pool.
+/// Run `f` with the open device on the blocking pool, alone: other commands wait for it.
 pub(crate) async fn with_device<T, F>(state: &AppState, f: F) -> CmdResult<T>
 where
     T: Send + 'static,
@@ -52,7 +52,8 @@ where
         .clone()
         .ok_or("not connected")?;
     let worker = device.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || f(&worker))
+    // One command at a time: a status poll must not land between the steps of an import.
+    let result = tauri::async_runtime::spawn_blocking(move || worker.exclusive(f))
         .await
         .map_err(|e| e.to_string())?;
     match result {
@@ -135,7 +136,7 @@ pub async fn disconnect(app: AppHandle) -> CmdResult<()> {
 
 /// Close the device off the main thread, since MKII EXIT waits for any request in flight.
 async fn close(app: AppHandle) -> CmdResult<()> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().close())
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().close(true))
         .await
         .map_err(|e| e.to_string())
 }

@@ -10,12 +10,18 @@ use crate::{Device, Error, Result, is_channel};
 pub use sp404_proto::fileapi::{DirEntry, Stat};
 
 const TIMEOUT: Duration = Duration::from_secs(5);
+/// Closing a file just written can take the device a while, as it finishes storing it.
+const CLOSE_AFTER_WRITE: Duration = Duration::from_secs(20);
 
 impl Device {
     fn file_call(&self, payload: Vec<u8>, what: &str) -> Result<Reply> {
+        self.file_call_within(payload, what, TIMEOUT)
+    }
+
+    fn file_call_within(&self, payload: Vec<u8>, what: &str, timeout: Duration) -> Result<Reply> {
         let msg = Message::long(Channel::File, payload);
         // Short messages on this channel are notifications, never replies.
-        let reply = self.transact(&msg, what, TIMEOUT, |m| {
+        let reply = self.transact(&msg, what, timeout, |m| {
             is_channel(m, Channel::File) && !m.is_short()
         })?;
         Ok(fileapi::parse_reply(reply.payload())?)
@@ -43,6 +49,15 @@ impl Device {
 
     pub fn close_file(&self, handle: i32) -> Result<()> {
         self.status_call(fileapi::close(handle), "close").map(drop)
+    }
+
+    /// Close a file that was written to, allowing the device time to finish storing it.
+    pub fn close_written(&self, handle: i32) -> Result<()> {
+        match self.file_call_within(fileapi::close(handle), "close", CLOSE_AFTER_WRITE)? {
+            Reply::Status { result: -1, .. } => Err(Error::Refused("close".into())),
+            Reply::Status { .. } => Ok(()),
+            Reply::Data { .. } => Err(Error::Unexpected("close".into())),
+        }
     }
 
     pub fn seek(&self, handle: i32, offset: u32) -> Result<u32> {
@@ -205,7 +220,7 @@ impl Device {
     ) -> Result<()> {
         let handle = self.open_file(path, fileapi::flags::CREATE_TRUNCATE_READ_WRITE)?;
         let written = self.write_with(handle, data, progress);
-        let closed = self.close_file(handle);
+        let closed = self.close_written(handle);
         written?;
         closed
     }
