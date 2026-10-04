@@ -5,6 +5,8 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-04
+
 ### Fixed
 
 - Importing samples and any other write to the card failed at once on Windows ("The
