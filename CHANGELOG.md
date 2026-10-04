@@ -5,6 +5,12 @@ Notable changes to SparkyMK2. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Fixed
+
+- Importing samples and any other write to the card failed at once on Windows ("The
+  semaphore timeout period has expired", os error 121): the serial port gave every write
+  2 ms to go out, too short for a 20 KB file chunk. Writes now get 5 seconds.
+
 ## [0.7.2] - 2026-10-03
 
 ### Added

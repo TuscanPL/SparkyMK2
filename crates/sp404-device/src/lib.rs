@@ -36,6 +36,10 @@ const SETTLE: Duration = Duration::from_millis(350);
 const READ_TIMEOUT: Duration = Duration::from_millis(2);
 #[cfg(not(windows))]
 const READ_TIMEOUT: Duration = Duration::from_millis(50);
+/// Write timeout on Windows. serialport gives writes the read timeout as well, and a
+/// 20 KB file chunk does not go out in 2 ms: the write fails with os error 121.
+#[cfg(windows)]
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -94,6 +98,40 @@ struct Inbox {
     events: VecDeque<Message>,
 }
 
+#[cfg(not(windows))]
+fn open_port(port_name: &str) -> serialport::Result<Box<dyn SerialPort>> {
+    serialport::new(port_name, BAUD)
+        .flow_control(serialport::FlowControl::None)
+        .timeout(READ_TIMEOUT)
+        .open()
+}
+
+/// Open with a short read timeout but a long write timeout, which serialport cannot
+/// set apart. Timeouts belong to the port, so the reader's cloned handle shares them.
+#[cfg(windows)]
+fn open_port(port_name: &str) -> serialport::Result<Box<dyn SerialPort>> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Devices::Communication::{SetCommTimeouts, COMMTIMEOUTS};
+
+    let port = serialport::new(port_name, BAUD)
+        .flow_control(serialport::FlowControl::None)
+        .timeout(READ_TIMEOUT)
+        .open_native()?;
+    // Same read settings serialport uses: return what has arrived, or wait up to the
+    // constant for the first byte.
+    let timeouts = COMMTIMEOUTS {
+        ReadIntervalTimeout: u32::MAX,
+        ReadTotalTimeoutMultiplier: u32::MAX,
+        ReadTotalTimeoutConstant: READ_TIMEOUT.as_millis() as u32,
+        WriteTotalTimeoutMultiplier: 0,
+        WriteTotalTimeoutConstant: WRITE_TIMEOUT.as_millis() as u32,
+    };
+    if unsafe { SetCommTimeouts(port.as_raw_handle() as _, &timeouts) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(Box::new(port))
+}
+
 pub struct Device {
     port_name: String,
     writer: Mutex<Box<dyn SerialPort>>,
@@ -112,11 +150,7 @@ impl Device {
     }
 
     pub fn open(port_name: &str) -> Result<Self> {
-        let mut port = serialport::new(port_name, BAUD)
-            .flow_control(serialport::FlowControl::None)
-            .timeout(READ_TIMEOUT)
-            .open()
-            .inspect_err(|e| log::warn!("open {port_name}: {e}"))?;
+        let mut port = open_port(port_name).inspect_err(|e| log::warn!("open {port_name}: {e}"))?;
         // The official app asserts both lines (control line state 0x0003) and pauses before
         // its first message; the control channel does not answer otherwise.
         port.write_request_to_send(true)?;

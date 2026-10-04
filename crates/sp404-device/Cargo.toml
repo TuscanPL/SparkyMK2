@@ -12,3 +12,7 @@ thiserror.workspace = true
 log.workspace = true
 # Default features include libudev, needed on Linux to read USB vid/pid for port discovery.
 serialport = "4"
+
+[target.'cfg(windows)'.dependencies]
+# serialport has no separate write timeout; see open_port.
+windows-sys = { version = "0.52", features = ["Win32_Devices_Communication", "Win32_Foundation"] }
