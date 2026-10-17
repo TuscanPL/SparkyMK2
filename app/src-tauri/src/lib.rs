@@ -37,8 +37,57 @@ impl AppState {
     }
 }
 
+/// On Wayland inside an AppImage, a bundled libwayland-client can cause protocol
+/// mismatches and `EGL_BAD_PARAMETER` errors. Preloading the host system's native
+/// 64-bit libwayland-client ensures compatibility with the running compositor.
+#[cfg(target_os = "linux")]
+fn appimage_wayland_preload_fix() {
+    use std::io::Read;
+    use std::os::unix::process::CommandExt;
+
+    let in_appimage = std::env::var_os("APPIMAGE").is_some();
+    let on_wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
+    let already_reexeced = std::env::var_os("__SPARKY_WAYLAND_PRELOAD_DONE").is_some();
+
+    if !in_appimage || !on_wayland || already_reexeced || std::env::var_os("LD_PRELOAD").is_some() {
+        return;
+    }
+
+    let candidates = [
+        "/usr/lib64/libwayland-client.so.0",
+        "/usr/lib/x86_64-linux-gnu/libwayland-client.so.0",
+        "/usr/lib/libwayland-client.so.0",
+    ];
+
+    for candidate in candidates {
+        if let Ok(mut f) = std::fs::File::open(candidate) {
+            let mut header = [0u8; 5];
+            if f.read_exact(&mut header).is_ok() && &header[..4] == b"\x7fELF" && header[4] == 2 {
+                if let Ok(exe) = std::env::current_exe() {
+                    let mut cmd = std::process::Command::new(exe);
+                    cmd.args(std::env::args_os().skip(1));
+                    cmd.env("LD_PRELOAD", candidate);
+                    cmd.env("__SPARKY_WAYLAND_PRELOAD_DONE", "1");
+                    let _ = cmd.exec();
+                }
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        appimage_wayland_preload_fix();
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            // SAFETY: Called early at startup before any worker threads are spawned.
+            unsafe {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            }
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
