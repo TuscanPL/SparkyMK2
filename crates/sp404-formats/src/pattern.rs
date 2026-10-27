@@ -115,6 +115,42 @@ impl Pattern {
     }
 }
 
+/// A valid pattern containing one full-velocity note at tick zero.
+///
+/// This lets the unit render a pad with its current playback settings. The pattern lasts
+/// `bars` bars of 4/4; no-op records carry gaps longer than a record's one-byte delta.
+pub fn single_pad(pad: PadIndex, bars: u8) -> Vec<u8> {
+    let bars = bars.clamp(1, 64);
+    let ticks = u32::from(bars) * 4 * u32::from(PPQ);
+    let group = pad.bank() / 5;
+    let within_group = (pad.bank() % 5) * 16 + pad.pad();
+    let note = 0x2F + within_group as u8;
+    let gate = ticks.min(u32::from(u16::MAX)) as u16;
+
+    let mut out = Vec::new();
+    let mut remaining = ticks;
+    let first = remaining.min(255) as u8;
+    remaining -= u32::from(first);
+    out.extend_from_slice(&[
+        first,
+        note,
+        group as u8,
+        0,
+        127,
+        64,
+        gate as u8,
+        (gate >> 8) as u8,
+    ]);
+    while remaining > 0 {
+        let delta = remaining.min(255) as u8;
+        remaining -= u32::from(delta);
+        out.extend_from_slice(&[delta, 0x80, 0, 0, 0, 0, 0, 0]);
+    }
+    out.extend_from_slice(&[0, END, 0, 0, 0, 0, 0, 0]);
+    out.extend_from_slice(&[bars, 0, 0, 0, 0, 0x80, 0x04, 0x01]);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,5 +205,18 @@ mod tests {
     #[test]
     fn rejects_ragged_files() {
         assert!(Pattern::parse(&[0; 7]).is_err());
+    }
+
+    #[test]
+    fn builds_a_single_pad_pattern() {
+        let pad = PadIndex::from_bank_pad(7, 12).unwrap();
+        let bytes = single_pad(pad, 3);
+        let pattern = Pattern::parse(&bytes).unwrap();
+        assert_eq!(pattern.length, 3 * 4 * u32::from(PPQ));
+        assert_eq!(pattern.beats_per_bar(), Some(4));
+        assert!(matches!(
+            pattern.events.as_slice(),
+            [Event::Note { tick: 0, pad: found, velocity: 127, .. }] if *found == pad
+        ));
     }
 }

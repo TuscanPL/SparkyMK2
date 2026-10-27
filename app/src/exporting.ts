@@ -81,6 +81,30 @@ export async function exportSounds(scope: ExportScope, indices: number[]) {
   }
 }
 
+/** Ask the unit to render one pad with its current playback settings, without BUS FX. */
+export async function exportRenderedSound(index: number) {
+  if (!store.pads[index]?.hasSample) return;
+  const place = await choosePlace(
+    `Export rendered pad ${padLabel(index)}`,
+    "The SP-404MKII will render this pad with its current pitch, stretch, envelope and other pad settings. BUS and master effects are not included.",
+  );
+  if (!place) return;
+
+  store.pending++;
+  store.working[index] = "Rendering";
+  try {
+    const file = await api.exportRenderedPad(index, place.target, place.base);
+    const where = place.target === "card" ? `the SD card, ${place.base}` : place.base;
+    notify(`${file} exported to ${where}`, "info");
+  } catch (e) {
+    notify(errorText(e));
+  } finally {
+    store.pending--;
+    delete store.working[index];
+    store.transfer = null;
+  }
+}
+
 /** Put an export back: every sound on the pad it came from, with its settings. */
 export async function restoreExport(target: Place, folder: string) {
   let sheet;

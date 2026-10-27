@@ -1,5 +1,6 @@
 //! Remote file API on the device's SD card (channel 6).
 
+use std::io::Read;
 use std::time::{Duration, Instant};
 
 use sp404_proto::fileapi::{self, Reply};
@@ -224,6 +225,28 @@ impl Device {
     /// Create or replace a file with `data`.
     pub fn write_file(&self, path: &str, data: &[u8]) -> Result<()> {
         self.write_file_with(path, data, |_, _| {})
+    }
+
+    /// Create or replace a file by streaming `size` bytes from a reader. This avoids
+    /// keeping a rendered WAV in memory while it is copied back to the SD card.
+    pub fn write_file_from(&self, path: &str, reader: &mut impl Read, size: u64) -> Result<()> {
+        let handle = self.open_file(path, fileapi::flags::CREATE_TRUNCATE_READ_WRITE)?;
+        let written = (|| -> Result<()> {
+            let mut left = size;
+            // Match the normal writer's batch size: bounded memory, without paying for
+            // one USB acknowledgement per 20 KB chunk.
+            let mut buffer = vec![0; fileapi::CHUNK * fileapi::WRITE_BATCH];
+            while left > 0 {
+                let want = buffer.len().min(left as usize);
+                reader.read_exact(&mut buffer[..want])?;
+                self.write(handle, &buffer[..want])?;
+                left -= want as u64;
+            }
+            Ok(())
+        })();
+        let closed = self.close_written(handle);
+        written?;
+        closed
     }
 
     /// Like [`Device::write_file`], calling `progress(done, total)` as batches go out.

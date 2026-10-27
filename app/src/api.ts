@@ -315,6 +315,8 @@ export const api = {
   previewAudio: (volume: Volume, path: string) => invoke<ArrayBuffer>("preview_audio", { volume, path }),
   exportPads: (pads: number[], target: Place, folder: string, sidecar: boolean) =>
     invoke<ExportSummary>("export_pads", { pads, target, folder, sidecar }),
+  exportRenderedPad: (pad: number, target: Place, folder: string) =>
+    invoke<string>("export_rendered_pad", { pad, target, folder }),
   readExport: (target: Place, folder: string) => invoke<ExportSheet>("read_export", { target, folder }),
   restorePads: (target: Place, folder: string) => invoke<number>("restore_pads", { target, folder }),
   backupProject: (project: number, folder: string) => invoke<number>("backup_project", { project, folder }),

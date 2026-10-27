@@ -175,6 +175,35 @@ impl Device {
         }
     }
 
+    /// Reload the current project after a narrowly scoped change to one of its files.
+    /// Unlike [`Device::restore_project`], this does not erase or write project data.
+    pub fn reload_current_project(&self) -> Result<()> {
+        use control::restore;
+        let project = self.current_project()?;
+        let reloaded = self.transact(
+            &short(&restore::reload(project)),
+            "reload project",
+            Duration::from_secs(15),
+            |m| {
+                is_channel(m, Channel::Control)
+                    && m.payload().first() == Some(&restore::RELOAD_REPLY)
+            },
+        )?;
+        if let Some(&code) = reloaded.payload().get(1).filter(|&&c| c != 0) {
+            return Err(refused("reload project", code));
+        }
+        let mut inbox = self.inbox.lock().unwrap();
+        Self::wait(
+            &mut inbox,
+            "project reload",
+            Duration::from_secs(15),
+            &mut |m: &Message| {
+                is_channel(m, Channel::Control) && m.payload().first() == Some(&restore::RELOADED)
+            },
+        )?;
+        Ok(())
+    }
+
     /// Leave the remote screen on the device (the app's "MKII EXIT"). The link stays up.
     pub fn mkii_exit(&self) -> Result<()> {
         self.fire(&short(&control::mkii_exit()))

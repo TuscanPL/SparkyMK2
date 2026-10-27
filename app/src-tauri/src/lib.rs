@@ -87,6 +87,7 @@ pub fn run() {
             files::create_dir,
             files::preview_audio,
             export::export_pads,
+            export::export_rendered_pad,
             export::read_export,
             export::restore_pads,
             export::export_pattern,

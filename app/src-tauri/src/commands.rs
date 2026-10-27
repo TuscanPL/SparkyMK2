@@ -16,6 +16,7 @@ use crate::AppState;
 pub(crate) type CmdResult<T> = Result<T, String>;
 
 /// A failed device call. `Closed` means the link is gone, so the device is dropped.
+#[derive(Debug)]
 pub(crate) enum Failure {
     Device(sp404_device::Error),
     Other(String),
@@ -29,6 +30,12 @@ impl From<sp404_device::Error> for Failure {
 
 impl From<sp404_formats::FormatError> for Failure {
     fn from(e: sp404_formats::FormatError) -> Self {
+        Failure::Other(e.to_string())
+    }
+}
+
+impl From<std::io::Error> for Failure {
+    fn from(e: std::io::Error) -> Self {
         Failure::Other(e.to_string())
     }
 }

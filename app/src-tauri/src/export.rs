@@ -14,6 +14,8 @@
 //! export holds, and restores into the current project.
 
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -190,6 +192,23 @@ impl Place {
             Place::Card(dir) => Ok(dev.read_file(&Self::card_path(dir, name))?),
         }
     }
+
+    /// Copy a local file to the destination without loading it all into memory.
+    fn write_file(&self, dev: &Device, name: &str, source: &Path) -> Result<(), Failure> {
+        match self {
+            Place::Local(dir) => {
+                let path = dir.join(name);
+                std::fs::copy(source, &path)
+                    .map(|_| ())
+                    .map_err(|e| Failure::Other(format!("writing {}: {e}", path.display())))
+            }
+            Place::Card(dir) => {
+                let mut input = File::open(source)?;
+                let size = input.metadata()?.len();
+                Ok(dev.write_file_from(&Self::card_path(dir, name), &mut input, size)?)
+            }
+        }
+    }
 }
 
 fn emit(app: &AppHandle, name: &str, done: usize, total: usize) {
@@ -289,6 +308,173 @@ pub async fn export_pads(
         }
     })
     .await
+}
+
+/// Render one pad on the unit through a temporary one-note pattern. Only a slot which is
+/// empty both in the device's index and on disk is used, so user patterns are never
+/// replaced. MULTIPAD is the dry stem path: pad playback settings are applied, while BUS
+/// and master effects are not part of the result.
+#[tauri::command]
+pub async fn export_rendered_pad(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pad: u16,
+    target: String,
+    folder: String,
+) -> CmdResult<String> {
+    with_device(&state, move |dev| {
+        let pad = pad_index(pad)?;
+        let pad_state = read_pad(dev, pad)?;
+        let sample = pad_state
+            .detail
+            .sample
+            .as_ref()
+            .ok_or_else(|| Failure::Other(format!("{pad} is empty")))?;
+        let project = dev.current_project()?;
+        let root = format!("ROLAND/SP-404MKII/PROJECT_{:02}/PTN", project + 1);
+
+        // Work backwards so the temporary slot is normally out of the user's way. Check
+        // both views: a stale file must not be mistaken for a safely empty slot.
+        let mut temporary = None;
+        for slot in (0..160).rev().filter_map(PadIndex::new) {
+            let path = format!("{root}/PTN{:05}.BIN", slot.index() + 1);
+            if !dev.pattern_exists(slot)? && dev.stat(&path)?.is_none() {
+                temporary = Some((slot, path));
+                break;
+            }
+        }
+        let (slot, pattern_path) = temporary.ok_or_else(|| {
+            Failure::Other(
+                "Rendered export needs one empty pattern slot; this project has none".into(),
+            )
+        })?;
+
+        // Allow for the slowest pitch/stretch combination and an envelope tail. The
+        // completed stem is trimmed back to its last audible frame below.
+        let source_seconds = sample.end.saturating_sub(sample.start) as f64 / 48_000.0;
+        let tempo = f64::from(
+            dev.project_settings(project)?
+                .bank(slot.bank() as usize)
+                .tempo,
+        ) / 100.0;
+        let wanted_seconds = source_seconds * 3.0 + 2.0;
+        let bars = ((wanted_seconds * tempo / 240.0).ceil() as u8).clamp(1, 64);
+        let pattern = sp404_formats::pattern::single_pad(pad, bars);
+        let place = Place::new(&target, &folder)?;
+        place.create(dev)?;
+        let file = format!(
+            "{} {} rendered.wav",
+            label(pad),
+            sanitize(&pad_state.detail.name)
+        );
+        emit(&app, &file, 0, 1);
+
+        dev.write_file(&pattern_path, &pattern)?;
+        let rendered = (|| -> Result<tempfile::NamedTempFile, Failure> {
+            dev.reload_current_project()?;
+            let mut out = tempfile::NamedTempFile::new()?;
+            dev.render_pattern_pad(slot, pad, out.as_file_mut())?;
+            trim_rendered_file(out.as_file_mut(), sample.end.saturating_sub(sample.start))?;
+            Ok(out)
+        })();
+
+        // Cleanup is attempted regardless of rendering success. Do not hide a cleanup
+        // failure after a successful render, because that would leave a visible pattern.
+        let removed = dev.unlink(&pattern_path);
+        let reloaded = dev.reload_current_project();
+        let cleanup = removed.and(reloaded);
+        let sound = match (rendered, cleanup) {
+            (Ok(sound), Ok(())) => sound,
+            (Ok(_), Err(cleanup)) => return Err(cleanup.into()),
+            (Err(render), Ok(())) => return Err(render),
+            (Err(render), Err(cleanup)) => {
+                let render = match render {
+                    Failure::Device(error) => error.to_string(),
+                    Failure::Other(error) => error,
+                };
+                return Err(Failure::Other(format!(
+                    "{render}; removing the temporary pattern also failed: {cleanup}"
+                )));
+            }
+        };
+        place.write_file(dev, &file, sound.path())?;
+        emit(&app, &file, 1, 1);
+        Ok(file)
+    })
+    .await
+}
+
+/// Remove the exact-zero tail added by the temporary pattern in place, retaining 50 ms
+/// after the last audible frame. The renderer writes PCM WAV, so no decoding or second
+/// full-size audio buffer is needed.
+fn trim_rendered_file(file: &mut File, source_frames: u32) -> Result<(), Failure> {
+    file.seek(SeekFrom::Start(0))?;
+    let mut riff = [0; 12];
+    file.read_exact(&mut riff)?;
+    if &riff[..4] != b"RIFF" || &riff[8..] != b"WAVE" {
+        return Err(Failure::Other("the device rendered an invalid WAV".into()));
+    }
+
+    let mut block_align = None;
+    let (data_size_at, data_at, data_size) = loop {
+        let mut header = [0; 8];
+        file.read_exact(&mut header)?;
+        let size = u32::from_le_bytes(header[4..8].try_into().unwrap()) as u64;
+        let body = file.stream_position()?;
+        match &header[..4] {
+            b"fmt " => {
+                if size < 16 {
+                    return Err(Failure::Other(
+                        "the rendered WAV has a short fmt chunk".into(),
+                    ));
+                }
+                let mut format = [0; 16];
+                file.read_exact(&mut format)?;
+                let pcm = u16::from_le_bytes(format[0..2].try_into().unwrap());
+                let bits = u16::from_le_bytes(format[14..16].try_into().unwrap());
+                if pcm != 1 || bits != 16 {
+                    return Err(Failure::Other("the rendered WAV is not 16-bit PCM".into()));
+                }
+                block_align = Some(u16::from_le_bytes(format[12..14].try_into().unwrap()) as u64);
+            }
+            b"data" => {
+                break (body - 4, body, size);
+            }
+            _ => {}
+        }
+        file.seek(SeekFrom::Start(body + size + (size & 1)))?;
+    };
+
+    let align = block_align
+        .filter(|&n| n > 0)
+        .ok_or_else(|| Failure::Other("the rendered WAV has no usable fmt chunk".into()))?;
+    let frames = data_size / align;
+    let mut audible = None;
+    let mut end = data_size;
+    let mut buffer = vec![0; 64 * 1024];
+    while end > 0 && audible.is_none() {
+        let start = end.saturating_sub(buffer.len() as u64);
+        let len = (end - start) as usize;
+        file.seek(SeekFrom::Start(data_at + start))?;
+        file.read_exact(&mut buffer[..len])?;
+        if let Some(byte) = buffer[..len].iter().rposition(|&value| value != 0) {
+            audible = Some((start + byte as u64) / align);
+        }
+        end = start;
+    }
+    let keep_frames = match audible {
+        Some(last) => (last + 1 + 2_400).min(frames),
+        None => u64::from(source_frames).max(1).min(frames.max(1)),
+    };
+    let keep_bytes = keep_frames * align;
+    let file_len = data_at + keep_bytes;
+    file.set_len(file_len)?;
+    file.seek(SeekFrom::Start(data_size_at))?;
+    file.write_all(&(keep_bytes as u32).to_le_bytes())?;
+    file.seek(SeekFrom::Start(4))?;
+    file.write_all(&((file_len - 8) as u32).to_le_bytes())?;
+    file.flush()?;
+    Ok(())
 }
 
 fn parse_sidecar(bytes: &[u8]) -> Result<Sidecar, Failure> {
@@ -436,6 +622,26 @@ mod tests {
     fn refuses_other_json() {
         assert!(parse_sidecar(br#"{"format":"x","version":1,"project":"","pads":[]}"#).is_err());
         assert!(parse_sidecar(b"not json").is_err());
+    }
+
+    #[test]
+    fn trims_a_rendered_wav_without_loading_it_whole() {
+        let mut samples = vec![0; 3_000 * 2];
+        samples[0] = 7;
+        let wav = wav::to_bytes(&Sample {
+            channels: 2,
+            samples,
+        })
+        .unwrap();
+        let mut file = tempfile::tempfile().unwrap();
+        file.write_all(&wav).unwrap();
+        trim_rendered_file(&mut file, 3_000).unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut trimmed = Vec::new();
+        file.read_to_end(&mut trimmed).unwrap();
+        let decoded = audio::read_bytes(trimmed, "wav").unwrap().sample;
+        assert_eq!(decoded.frames(), 2_401);
+        assert_eq!(decoded.samples[0], 7);
     }
 }
 
