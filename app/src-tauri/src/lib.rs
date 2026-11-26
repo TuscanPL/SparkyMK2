@@ -1,5 +1,6 @@
 //! SparkyMK2 desktop app: Tauri commands over the `sp404-device` core.
 
+mod audio;
 mod commands;
 mod edit;
 mod export;
@@ -44,6 +45,9 @@ pub fn run() {
         .manage(AppState::default())
         .setup(|app| {
             logging::init(app.handle());
+            app.manage(audio::Player::new(app.handle().clone()));
+            app.manage(Mutex::new(audio::SoundCache::new()));
+            app.manage(audio::Monitor::new());
             log::info!("SparkyMK2 {} started", env!("CARGO_PKG_VERSION"));
             Ok(())
         })
@@ -87,7 +91,12 @@ pub fn run() {
             files::delete_path,
             files::rename_path,
             files::create_dir,
-            files::preview_audio,
+            files::sound_fetch,
+            files::sound_cached,
+            files::sound_play,
+            files::sound_stop,
+            files::sound_outputs,
+            files::sound_monitor,
             export::export_pads,
             export::read_export,
             export::restore_pads,

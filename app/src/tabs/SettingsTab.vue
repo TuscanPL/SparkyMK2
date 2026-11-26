@@ -6,8 +6,18 @@ import EditableName from "../components/EditableName.vue";
 import Icon from "../components/Icon.vue";
 import { BANK_LETTERS, PROJECT_NAME_LEN, bpm, storage } from "../format";
 import { backupProject, restoreBackup } from "../exporting";
-import { api, errorText, setLoggingActive, type ClearParts, type LoggingState } from "../api";
-import { clearProject, loadLibrary, renameProject, savePrefs, setGlobalParam, setLibraryDir, store, swapBanks } from "../store";
+import { api, errorText, setLoggingActive, type AudioOutput, type ClearParts, type LoggingState } from "../api";
+import {
+  applyMonitor,
+  clearProject,
+  loadLibrary,
+  renameProject,
+  savePrefs,
+  setGlobalParam,
+  setLibraryDir,
+  store,
+  swapBanks,
+} from "../store";
 
 /** Shown so a bug report can say which version it is about. */
 const version = ref("");
@@ -18,6 +28,39 @@ if (!store.library.loaded && !store.library.loading) loadLibrary();
 async function chooseLibraryDir() {
   const dir = await open({ directory: true, title: "Keep the screen library in", defaultPath: store.library.dir || undefined });
   if (typeof dir === "string") await setLibraryDir(dir);
+}
+
+/** Where sounds from the device are played on this computer (Files, Import & Export). */
+const outputs = ref<AudioOutput[]>([]);
+const outputsError = ref("");
+const outputsLoading = ref(false);
+
+async function loadOutputs() {
+  outputsLoading.value = true;
+  outputsError.value = "";
+  try {
+    outputs.value = await api.soundOutputs();
+  } catch (e) {
+    outputsError.value = errorText(e);
+  } finally {
+    outputsLoading.value = false;
+  }
+}
+loadOutputs();
+
+/** The saved output is not connected now; it is used again once it is back. */
+const outputMissing = computed(
+  () => !!store.prefs.audioOutput && !outputsLoading.value && !outputs.value.some((o) => o.id === store.prefs.audioOutput),
+);
+
+/** A new output also moves the monitor there. */
+function changeOutput() {
+  savePrefs();
+  if (store.prefs.monitorSampler) void applyMonitor();
+}
+
+function outputLabel(o: AudioOutput) {
+  return o.name + (o.isDefault ? " (system default)" : "") + (o.isSampler ? " (the SP-404MKII)" : "");
 }
 
 /** The diagnostic log, for sending in with a bug report. */
@@ -328,6 +371,29 @@ async function commitVolume(letter: string, current: number) {
           </span>
         </span>
       </label>
+      <div class="pref library-dir">
+        <span>
+          Play sounds on
+          <span class="muted hint">
+            Where files on the device are heard when you preview them in the Files tab and the Import browser, and
+            where Monitor (in the bar on Samples and Patterns) plays the SP-404MKII.
+            Automatic uses the system's default output, or another one when the default is the SP-404MKII itself,
+            which stays silent unless it is set to play USB audio.
+            <template v-if="outputMissing"><br />The output chosen before is not connected; Automatic is used until it is back.</template>
+            <template v-if="outputsError"><br /><span class="log-error">{{ outputsError }}</span></template>
+          </span>
+        </span>
+        <div class="dir-buttons">
+          <select v-model="store.prefs.audioOutput" class="output" @change="changeOutput">
+            <option value="">Automatic</option>
+            <option v-if="outputMissing" :value="store.prefs.audioOutput">Not connected</option>
+            <option v-for="o in outputs" :key="o.id" :value="o.id">{{ outputLabel(o) }}</option>
+          </select>
+          <button :disabled="outputsLoading" title="Look for outputs again" @click="loadOutputs">
+            <Icon name="refresh" :size="14" />
+          </button>
+        </div>
+      </div>
       <label class="pref">
         <span class="switch">
           <input v-model="store.prefs.collectScreens" type="checkbox" @change="savePrefs" />
@@ -491,6 +557,10 @@ async function commitVolume(letter: string, current: number) {
   display: flex;
   gap: 8px;
   flex: none;
+}
+
+.output {
+  max-width: 280px;
 }
 
 .pref .hint {

@@ -3,7 +3,7 @@ import { computed } from "vue";
 import Icon from "./Icon.vue";
 import logo from "../assets/sparkymk2.png";
 import { bpm, storage } from "../format";
-import { disconnect, refresh, selectProject, store, type Tab } from "../store";
+import { applyMonitor, disconnect, refresh, savePrefs, selectProject, store, type Tab } from "../store";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "samples", label: "Samples" },
@@ -18,6 +18,21 @@ const tempo = computed(() => {
   if (!s) return "";
   return s.usesProjectTempo ? `${bpm(s.projectTempo)} BPM` : "Per bank";
 });
+
+/** Hearing the unit on the computer matters where pads and patterns are played. */
+const showMonitor = computed(() => store.tab === "samples" || store.tab === "patterns");
+
+const monitorTitle = computed(() => {
+  if (store.monitor.error) return `Can't hear the SP-404MKII here: ${store.monitor.error}`;
+  if (store.prefs.monitorSampler && store.monitor.on) return `Playing the SP-404MKII on ${store.monitor.on}. Click to stop.`;
+  return "Hear the SP-404MKII on this computer, through the output chosen in Settings. Leave it off if you listen to the unit's own outputs.";
+});
+
+function toggleMonitor() {
+  store.prefs.monitorSampler = !store.prefs.monitorSampler;
+  savePrefs();
+  void applyMonitor();
+}
 
 function onProject(event: Event) {
   selectProject(Number((event.target as HTMLSelectElement).value));
@@ -64,6 +79,17 @@ function onProject(event: Event) {
         <span class="mono">{{ storage(store.status.freeKb) }}</span>
       </div>
 
+      <button
+        v-if="showMonitor"
+        class="ghost monitor"
+        :class="{ on: store.prefs.monitorSampler && !store.monitor.error, failed: store.prefs.monitorSampler && store.monitor.error }"
+        :title="monitorTitle"
+        :aria-pressed="store.prefs.monitorSampler"
+        @click="toggleMonitor"
+      >
+        <Icon name="headphones" :size="15" />
+        <span class="label">Monitor</span>
+      </button>
       <span v-if="store.pending" class="saving muted"><span class="spinner" /> Saving</span>
       <button class="ghost icon" title="Reload from the device" @click="refresh">
         <Icon name="refresh" />
@@ -128,6 +154,25 @@ function onProject(event: Event) {
 
 .spacer {
   flex: 1;
+}
+
+.monitor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.monitor .label {
+  color: inherit;
+}
+
+.monitor.on {
+  color: var(--accent);
+}
+
+.monitor.failed {
+  color: var(--danger, #e5534b);
 }
 
 .project {

@@ -18,6 +18,7 @@ pkgbase = sparkymk2
 	depends = gdk-pixbuf2
 	depends = dbus
 	depends = systemd-libs
+	depends = alsa-lib
 	depends = gcc-libs
 	depends = glibc
 	depends = hicolor-icon-theme

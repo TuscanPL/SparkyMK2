@@ -1,10 +1,11 @@
 // Listening to a sound that lives on the device.
 //
-// The protocol can only preview a pad, so anything else is decoded by the backend into a
-// WAV and played here, through the computer's speakers rather than the SP-404MKII.
+// The protocol can only preview a pad, so anything else is read and decoded by the
+// backend and played on this computer's speakers, through the output chosen in Settings.
 import { reactive } from "vue";
+import { listen } from "@tauri-apps/api/event";
 import { api, errorText, logLine, type CardEntry, type Volume } from "./api";
-import { notify } from "./store";
+import { notify, store } from "./store";
 
 /** Extensions the backend can turn into something playable; mirrors `files::playable`. */
 const PLAYABLE = ["wav", "bwf", "aif", "aiff", "flac", "mp3", "smp"];
@@ -24,8 +25,8 @@ export const preview = reactive({
 /** Progress of a folder being preloaded into the cache. */
 export const preload = reactive({ running: false, done: 0, total: 0 });
 
-let context: AudioContext | undefined;
-let source: AudioBufferSourceNode | undefined;
+/** Id of the sound the backend is playing for us, from `sound_play`. */
+let playingId = 0;
 /** Bumped per request, so a slow fetch cannot start over a newer one. */
 let token = 0;
 /** A keyboard audition waiting for the keys to settle. */
@@ -35,84 +36,39 @@ let pending: number | undefined;
  * instead of queueing a read over USB for every sound it passes. */
 const AUDITION_DELAY_MS = 180;
 
-// Decoded sounds, most recently heard last. Browsing a folder goes back and forth, and a
-// cached sound plays at once instead of being read over USB again. Capped by memory: a
-// decoded buffer is 32-bit float, and previews are cut at 30 s, so ~11 MB at most each.
-// Big enough to hold a whole folder of loops when folders are preloaded.
+/** The backend keeps decoded sounds (up to 256 MB) so going back to one plays it at
+ * once; mirrors `audio::CACHE_BYTES`, for the folder preload to stop before it. */
 const CACHE_BYTES = 256 * 1024 * 1024;
-const cache = new Map<string, AudioBuffer>();
-let cacheBytes = 0;
 
-/** By size as well as path, like the waveform cache: a file overwritten in the Files tab
- * almost always changes size, so it is fetched again rather than replayed stale. A size
- * not known yet keys as `null`, so that one is fetched again once its size arrives. */
-function keyOf(volume: Volume, path: string, size: number | null): string {
-  return `${volume}:${path}:${size}`;
-}
+// Sounds play from the backend, on the output chosen in Settings, not in the webview:
+// webviews cannot pick an output, and on Windows the default is often the SP-404MKII.
+type Ended = { id: number; error: string | null };
+/** The last sound to end, kept for the case where it ends (fails to open, or is very
+ * short) before `sound_play` has even answered with its id. */
+let lastEnded: Ended | null = null;
 
-function sizeOf(buffer: AudioBuffer): number {
-  return buffer.length * buffer.numberOfChannels * 4;
-}
-
-function remember(key: string, buffer: AudioBuffer) {
-  const old = cache.get(key);
-  if (old) {
-    cache.delete(key);
-    cacheBytes -= sizeOf(old);
-  }
-  cache.set(key, buffer);
-  cacheBytes += sizeOf(buffer);
-  // A Map iterates oldest first, so this drops the sounds heard longest ago.
-  for (const [k, b] of cache) {
-    if (cacheBytes <= CACHE_BYTES) break;
-    cache.delete(k);
-    cacheBytes -= sizeOf(b);
+function ended(e: Ended) {
+  playingId = 0;
+  preview.playing = null;
+  if (e.error) {
+    logLine("warn", `audio: ${e.error}`);
+    notify(e.error);
   }
 }
 
-function recall(key: string): AudioBuffer | undefined {
-  const buffer = cache.get(key);
-  if (buffer) {
-    cache.delete(key);
-    cache.set(key, buffer);
-  }
-  return buffer;
-}
+void listen<Ended>("sound-ended", (e) => {
+  lastEnded = e.payload;
+  if (e.payload.id === playingId) ended(e.payload);
+});
 
 export function stopPreview() {
   token++;
   window.clearTimeout(pending);
   pending = undefined;
-  source?.stop();
-  source?.disconnect();
-  source = undefined;
+  if (preview.playing !== null || preview.loading !== null) void api.soundStop();
+  playingId = 0;
   preview.playing = null;
   preview.loading = null;
-}
-
-function start(buffer: AudioBuffer, path: string, mine: number) {
-  context ??= new AudioContext();
-  // A context first made while preloading had no click behind it, and browsers start
-  // those suspended; without this the first sound would play silently.
-  if (context.state === "suspended") {
-    context.resume().catch((e) => logLine("warn", `audio: resume failed: ${errorText(e)}`));
-  }
-  logLine(
-    "debug",
-    `audio: play ${path}, ${buffer.duration.toFixed(2)} s at ${buffer.sampleRate} Hz, context ${context.state} at ${context.sampleRate} Hz`,
-  );
-  source = context.createBufferSource();
-  source.buffer = buffer;
-  source.connect(context.destination);
-  source.onended = () => {
-    if (mine === token) {
-      preview.playing = null;
-      source = undefined;
-    }
-  };
-  preview.loading = null;
-  preview.playing = path;
-  source.start();
 }
 
 /** Fetch a sound from the device and play it; clicking the one already playing stops it. */
@@ -123,22 +79,23 @@ export async function playPreview(volume: Volume, path: string, size: number | n
   }
   stopPreview();
   const mine = ++token;
-  const key = keyOf(volume, path, size);
-  const cached = recall(key);
-  if (cached) {
-    start(cached, path, mine);
-    return;
-  }
   preview.loading = path;
   try {
-    const wav = await api.previewAudio(volume, path);
-    context ??= new AudioContext();
-    // decodeAudioData detaches the buffer it is given, so hand it a copy.
-    const buffer = await context.decodeAudioData(wav.slice(0));
-    // Keep it even if the listener has moved on: browsing tends to come back.
-    remember(key, buffer);
+    // Answers at once when the sound is cached.
+    await api.soundFetch(volume, path, size);
     if (mine !== token) return;
-    start(buffer, path, mine);
+    const output = store.prefs.audioOutput || null;
+    logLine("debug", `audio: play ${path} on ${output ?? "automatic output"}`);
+    const id = await api.soundPlay(volume, path, size, output);
+    // Stopped or replaced while it was starting: the stop may have gone out first.
+    if (mine !== token) {
+      if (preview.playing === null && preview.loading === null) void api.soundStop();
+      return;
+    }
+    preview.loading = null;
+    preview.playing = path;
+    playingId = id;
+    if (lastEnded?.id === id) ended(lastEnded);
   } catch (e) {
     logLine("warn", `audio: ${path} did not play: ${errorText(e)}`);
     if (mine === token) {
@@ -153,15 +110,17 @@ export async function playPreview(volume: Volume, path: string, size: number | n
  * Play a sound reached by keyboard. The previous one stops at once; a sound already heard
  * plays straight away, anything else waits for the keys to settle before it is fetched.
  */
-export function auditionPreview(volume: Volume, path: string, size: number | null = null) {
+export async function auditionPreview(volume: Volume, path: string, size: number | null = null) {
   stopPreview();
-  if (cache.has(keyOf(volume, path, size))) {
-    playPreview(volume, path, size);
+  const mine = token;
+  if (await api.soundCached(volume, path, size)) {
+    if (mine === token) void playPreview(volume, path, size);
     return;
   }
+  if (mine !== token) return;
   pending = window.setTimeout(() => {
     pending = undefined;
-    playPreview(volume, path, size);
+    void playPreview(volume, path, size);
   }, AUDITION_DELAY_MS);
 }
 
@@ -188,19 +147,11 @@ export async function preloadFolder(volume: Volume, entries: CardEntry[]) {
   let folderBytes = 0;
   for (const entry of sounds) {
     if (mine !== preloadRun) return;
-    const key = keyOf(volume, entry.path, entry.size);
-    if (!cache.has(key)) {
-      try {
-        const wav = await api.previewAudio(volume, entry.path);
-        if (mine !== preloadRun) return;
-        context ??= new AudioContext();
-        const buffer = await context.decodeAudioData(wav.slice(0));
-        folderBytes += sizeOf(buffer);
-        if (folderBytes > CACHE_BYTES) break;
-        remember(key, buffer);
-      } catch {
-        // Too big or not really audio: it simply stays unloaded, and says why if clicked.
-      }
+    try {
+      folderBytes += await api.soundFetch(volume, entry.path, entry.size);
+      if (folderBytes > CACHE_BYTES) break;
+    } catch {
+      // Too big or not really audio: it simply stays unloaded, and says why if clicked.
     }
     preload.done++;
   }

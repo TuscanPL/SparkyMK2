@@ -7,12 +7,14 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use sp404_formats::{Sample, audio, wav};
+use sp404_formats::{Sample, audio};
 use sp404_proto::fileapi;
-use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, State};
 
+use std::sync::{Arc, Mutex};
+
 use crate::AppState;
+use crate::audio::{self as sound, AudioOutput, Monitor, Player, Sound, SoundCache};
 use crate::commands::{CmdResult, Failure, with_device};
 
 /// Progress of the transfer in flight, sent to the frontend as `transfer`.
@@ -345,43 +347,122 @@ pub fn playable(name: &str) -> bool {
     ext == "smp" || audio::EXTENSIONS.contains(&ext.as_str())
 }
 
-/// Decode a sound on the device into a WAV the webview can play. The device can only
-/// preview its own pads, so auditioning a file means playing it on this computer.
-#[tauri::command]
-pub async fn preview_audio(
-    state: State<'_, AppState>,
-    volume: String,
-    path: String,
-) -> CmdResult<Response> {
-    with_device(&state, move |dev| {
-        let target = qualify(&volume, &path)?;
-        let ext = extension(&path);
-        if !playable(&path) {
+/// Read a sound from the device and decode it for listening, cut at
+/// [`PREVIEW_MAX_SECONDS`]. The device can only preview its own pads, so auditioning a
+/// file means playing it on this computer.
+fn decode_for_preview(dev: &sp404_device::Device, volume: &str, path: &str) -> Result<Sample, Failure> {
+    let target = qualify(volume, path)?;
+    let ext = extension(path);
+    if !playable(path) {
+        return Err(Failure::Other(format!(
+            "{} is not a sound this app can play",
+            file_name(path)
+        )));
+    }
+    if let Some(stat) = dev.stat(&target)? {
+        if u64::from(stat.size) > PREVIEW_MAX_BYTES {
             return Err(Failure::Other(format!(
-                "{} is not a sound this app can play",
-                file_name(&path)
+                "{} is too big to preview",
+                file_name(path)
             )));
         }
-        if let Some(stat) = dev.stat(&target)? {
-            if u64::from(stat.size) > PREVIEW_MAX_BYTES {
-                return Err(Failure::Other(format!(
-                    "{} is too big to preview",
-                    file_name(&path)
-                )));
-            }
-        }
-        let bytes = dev.read_file(&target)?;
-        // The device's own samples are RFWV, not a format the decoder knows.
-        let mut sample = if ext == "smp" {
-            Sample::from_smp(&bytes)?
-        } else {
-            audio::read_bytes(bytes, &ext)?.sample
-        };
-        let limit = PREVIEW_MAX_SECONDS * 48_000 * usize::from(sample.channels.max(1));
-        sample.samples.truncate(limit);
-        Ok(Response::new(wav::to_bytes(&sample)?))
-    })
-    .await
+    }
+    let bytes = dev.read_file(&target)?;
+    // The device's own samples are RFWV, not a format the decoder knows.
+    let mut sample = if ext == "smp" {
+        Sample::from_smp(&bytes)?
+    } else {
+        audio::read_bytes(bytes, &ext)?.sample
+    };
+    let limit = PREVIEW_MAX_SECONDS * 48_000 * usize::from(sample.channels.max(1));
+    sample.samples.truncate(limit);
+    Ok(sample)
+}
+
+/// Cache key: by size as well as path, so a file overwritten in the Files tab (which
+/// almost always changes its size) is read again rather than replayed stale.
+fn sound_key(volume: &str, path: &str, size: Option<u32>) -> String {
+    format!("{volume}:{path}:{size:?}")
+}
+
+/// Read and decode a sound into the preview cache, unless it is there already. Answers
+/// its size in memory, so a folder preload can stop before it pushes its own sounds out.
+#[tauri::command]
+pub async fn sound_fetch(
+    state: State<'_, AppState>,
+    sounds: State<'_, Mutex<SoundCache>>,
+    volume: String,
+    path: String,
+    size: Option<u32>,
+) -> CmdResult<usize> {
+    let key = sound_key(&volume, &path, size);
+    if let Some(sound) = sounds.lock().unwrap().get(&key) {
+        return Ok(sound.samples.len() * 2);
+    }
+    let sample = with_device(&state, move |dev| decode_for_preview(dev, &volume, &path)).await?;
+    let sound = Arc::new(Sound { channels: sample.channels, samples: sample.samples });
+    let bytes = sound.samples.len() * 2;
+    sounds.lock().unwrap().insert(key, sound);
+    Ok(bytes)
+}
+
+/// Whether a sound is in the preview cache, so it can play without waiting.
+#[tauri::command]
+pub fn sound_cached(
+    sounds: State<'_, Mutex<SoundCache>>,
+    volume: String,
+    path: String,
+    size: Option<u32>,
+) -> bool {
+    sounds.lock().unwrap().get(&sound_key(&volume, &path, size)).is_some()
+}
+
+/// Play a fetched sound on `output` (an id from [`sound_outputs`]; none picks one).
+/// Answers the id the `sound-ended` event carries when it finishes.
+#[tauri::command]
+pub fn sound_play(
+    sounds: State<'_, Mutex<SoundCache>>,
+    player: State<'_, Player>,
+    volume: String,
+    path: String,
+    size: Option<u32>,
+    output: Option<String>,
+) -> CmdResult<u64> {
+    let sound = sounds
+        .lock()
+        .unwrap()
+        .get(&sound_key(&volume, &path, size))
+        .ok_or_else(|| format!("{} is not loaded", file_name(&path)))?;
+    Ok(player.play(sound, output))
+}
+
+#[tauri::command]
+pub fn sound_stop(player: State<'_, Player>) {
+    player.stop();
+}
+
+/// Pass the SP-404MKII's USB audio through to `output` (none picks one), or stop with
+/// `enabled` false. Answers the output's name.
+#[tauri::command]
+pub async fn sound_monitor(
+    monitor: State<'_, Monitor>,
+    enabled: bool,
+    output: Option<String>,
+) -> CmdResult<String> {
+    let wanted = enabled.then_some(output);
+    let monitor = monitor.inner().clone();
+    // Opening audio devices can take a moment; keep it off the main thread.
+    tauri::async_runtime::spawn_blocking(move || monitor.set(wanted))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The computer's audio outputs, for the picker in Settings.
+#[tauri::command]
+pub async fn sound_outputs() -> CmdResult<Vec<AudioOutput>> {
+    tauri::async_runtime::spawn_blocking(sound::outputs)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

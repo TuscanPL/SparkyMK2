@@ -55,6 +55,15 @@ export interface Bank {
   protected: boolean;
 }
 
+export interface AudioOutput {
+  /** Stable id, kept in the preferences. */
+  id: string;
+  name: string;
+  isDefault: boolean;
+  /** Looks like the SP-404MKII's own USB audio. */
+  isSampler: boolean;
+}
+
 export interface Status {
   port: string;
   /** 1-based. */
@@ -313,7 +322,18 @@ export const api = {
   screens: () => invoke<ScreenImages>("screens"),
   listVolume: (volume: Volume, path: string) => invoke<CardListing>("list_volume", { volume, path }),
   fileSizes: (volume: Volume, paths: string[]) => invoke<(number | null)[]>("file_sizes", { volume, paths }),
-  previewAudio: (volume: Volume, path: string) => invoke<ArrayBuffer>("preview_audio", { volume, path }),
+  /** Read and decode a sound into the backend's cache; answers its size in memory. */
+  soundFetch: (volume: Volume, path: string, size: number | null) =>
+    invoke<number>("sound_fetch", { volume, path, size }),
+  soundCached: (volume: Volume, path: string, size: number | null) =>
+    invoke<boolean>("sound_cached", { volume, path, size }),
+  /** Play a fetched sound; answers the id its `sound-ended` event carries. */
+  soundPlay: (volume: Volume, path: string, size: number | null, output: string | null) =>
+    invoke<number>("sound_play", { volume, path, size, output }),
+  soundStop: () => invoke<void>("sound_stop"),
+  soundOutputs: () => invoke<AudioOutput[]>("sound_outputs"),
+  /** Pass the SP-404MKII's USB audio to `output`, or stop; answers the output's name. */
+  soundMonitor: (enabled: boolean, output: string | null) => invoke<string>("sound_monitor", { enabled, output }),
   exportPads: (pads: number[], target: Place, folder: string, sidecar: boolean) =>
     invoke<ExportSummary>("export_pads", { pads, target, folder, sidecar }),
   readExport: (target: Place, folder: string) => invoke<ExportSheet>("read_export", { target, folder }),

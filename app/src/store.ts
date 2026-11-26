@@ -110,8 +110,14 @@ export const store = reactive({
     libraryDir: savedPrefs.libraryDir ?? "",
     /** Keep a copy of every display image written to the device in the library. */
     collectScreens: savedPrefs.collectScreens ?? true,
+    /** Output for listening to files from the device; empty picks one (not the SP-404MKII). */
+    audioOutput: (savedPrefs.audioOutput ?? "") as string,
+    /** Hear the SP-404MKII on this computer, through `audioOutput`. */
+    monitorSampler: (savedPrefs.monitorSampler ?? false) as boolean,
   },
   toasts: [] as Toast[],
+  /** The SP monitor: the output it plays on, or why it could not start. */
+  monitor: { on: "", error: "" },
 });
 
 let toastId = 0;
@@ -1121,3 +1127,27 @@ export async function renameProject(project: number, name: string) {
   });
   if (status) store.status = status;
 }
+
+/**
+ * Start, restart or stop passing the SP-404MKII's USB audio to this computer, as the
+ * preferences say. It needs no serial connection, only the unit's audio device, so it
+ * is tried at start-up, on every connect (the unit may just have been switched on), and
+ * whenever the switch or the output changes.
+ */
+export async function applyMonitor() {
+  const enabled = store.prefs.monitorSampler;
+  try {
+    const on = await api.soundMonitor(enabled, store.prefs.audioOutput || null);
+    store.monitor = { on: enabled ? on : "", error: "" };
+  } catch (e) {
+    store.monitor = { on: "", error: errorText(e) };
+  }
+}
+
+if (store.prefs.monitorSampler) void applyMonitor();
+watch(
+  () => store.connected,
+  (connected) => {
+    if (connected && store.prefs.monitorSampler) void applyMonitor();
+  },
+);

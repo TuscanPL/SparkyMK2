@@ -49,7 +49,8 @@
       "deb": {
         "section": "sound",
         "depends": [
-          "libudev1"
+          "libudev1",
+          "libasound2"
         ],
         "desktopTemplate": "../../packaging/linux/sparkymk2.desktop",
         "files": {
@@ -59,7 +60,8 @@
       },
       "rpm": {
         "depends": [
-          "systemd-libs"
+          "systemd-libs",
+          "alsa-lib"
         ],
         "desktopTemplate": "../../packaging/linux/sparkymk2.desktop",
         "files": {

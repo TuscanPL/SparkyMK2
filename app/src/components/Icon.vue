@@ -15,6 +15,7 @@ const paths = {
   file: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5zM14 3v5h5",
   stop: "M6 6h12v12H6z",
   chevron: "M9 6l6 6-6 6",
+  headphones: "M4 18v-6a8 8 0 0 1 16 0v6M4 15h3v6H5a1 1 0 0 1-1-1v-5zM20 15h-3v6h2a1 1 0 0 0 1-1v-5z",
 };
 </script>
 
