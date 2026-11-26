@@ -5,19 +5,20 @@
 //! (status notifications, duplicate echoes) is kept as an event.
 
 mod control;
+mod link;
 mod files;
 mod render;
 pub mod screens;
 
 use std::collections::VecDeque;
-use std::io::{ErrorKind, Read, Write};
+use std::io::ErrorKind;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use serialport::{SerialPort, SerialPortType};
+use serialport::SerialPortType;
 use sp404_proto::{Channel, Decoder, Message, ProtoError};
 
 pub use files::{DirEntry, Stat};
@@ -28,19 +29,6 @@ pub const USB_PID: u16 = 0x02E7;
 pub const BAUD: u32 = 921_600;
 
 const MAX_EVENTS: usize = 256;
-const SETTLE: Duration = Duration::from_millis(350);
-/// Read timeout of the reader thread. On Windows, synchronous reads and writes on the
-/// (duplicated) port handle are serialised, so a write waits for a pending read to time
-/// out: keep it short there.
-#[cfg(windows)]
-const READ_TIMEOUT: Duration = Duration::from_millis(2);
-#[cfg(not(windows))]
-const READ_TIMEOUT: Duration = Duration::from_millis(50);
-/// Write timeout on Windows. serialport gives writes the read timeout as well, and a
-/// 20 KB file chunk does not go out in 2 ms: the write fails with os error 121.
-#[cfg(windows)]
-const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("serial port: {0}")]
@@ -98,49 +86,24 @@ struct Inbox {
     events: VecDeque<Message>,
 }
 
-#[cfg(not(windows))]
-fn open_port(port_name: &str) -> serialport::Result<Box<dyn SerialPort>> {
-    serialport::new(port_name, BAUD)
-        .flow_control(serialport::FlowControl::None)
-        .timeout(READ_TIMEOUT)
-        .open()
-}
-
-/// Open with a short read timeout but a long write timeout, which serialport cannot
-/// set apart. Timeouts belong to the port, so the reader's cloned handle shares them.
-#[cfg(windows)]
-fn open_port(port_name: &str) -> serialport::Result<Box<dyn SerialPort>> {
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Devices::Communication::{SetCommTimeouts, COMMTIMEOUTS};
-
-    let port = serialport::new(port_name, BAUD)
-        .flow_control(serialport::FlowControl::None)
-        .timeout(READ_TIMEOUT)
-        .open_native()?;
-    // Same read settings serialport uses: return what has arrived, or wait up to the
-    // constant for the first byte.
-    let timeouts = COMMTIMEOUTS {
-        ReadIntervalTimeout: u32::MAX,
-        ReadTotalTimeoutMultiplier: u32::MAX,
-        ReadTotalTimeoutConstant: READ_TIMEOUT.as_millis() as u32,
-        WriteTotalTimeoutMultiplier: 0,
-        WriteTotalTimeoutConstant: WRITE_TIMEOUT.as_millis() as u32,
-    };
-    if unsafe { SetCommTimeouts(port.as_raw_handle() as _, &timeouts) } == 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    Ok(Box::new(port))
-}
-
 pub struct Device {
     port_name: String,
-    writer: Mutex<Box<dyn SerialPort>>,
+    link: Arc<dyn link::Link>,
     inbox: Mutex<Inbox>,
     /// Held for a whole multi-step operation; see [`Device::exclusive`].
     operation: Mutex<()>,
     stop: Arc<AtomicBool>,
     reader: Option<JoinHandle<()>>,
+    /// When the host last sent anything; see the `Drop` impl.
+    last_sent: Mutex<Instant>,
 }
+
+/// The unit keeps a host session alive for about 2.2 s after the host's last message.
+/// Closing the port inside a session while pads are being hit can freeze the unit (its
+/// controls and power switch stop answering until the port is opened and closed again),
+/// so the port is only closed once this long has passed since the last message.
+/// Reported by Jeremy Murray-Wakefield in issue #13.
+const CLOSE_AFTER_IDLE: Duration = Duration::from_secs(3);
 
 impl Device {
     /// Open the first SP-404MKII found.
@@ -150,13 +113,8 @@ impl Device {
     }
 
     pub fn open(port_name: &str) -> Result<Self> {
-        let mut port = open_port(port_name).inspect_err(|e| log::warn!("open {port_name}: {e}"))?;
-        // The official app asserts both lines (control line state 0x0003) and pauses before
-        // its first message; the control channel does not answer otherwise.
-        port.write_request_to_send(true)?;
-        port.write_data_terminal_ready(true)?;
-        std::thread::sleep(SETTLE);
-        let reader_port = port.try_clone()?;
+        let link = link::open(port_name).inspect_err(|e| log::warn!("open {port_name}: {e}"))?;
+        let reader_link = link.clone();
 
         let (tx, rx) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
@@ -164,11 +122,11 @@ impl Device {
             let stop = stop.clone();
             std::thread::Builder::new()
                 .name("sp404-reader".into())
-                .spawn(move || read_loop(reader_port, tx, stop))?
+                .spawn(move || read_loop(reader_link, tx, stop))?
         };
         Ok(Device {
             port_name: port_name.to_string(),
-            writer: Mutex::new(port),
+            link,
             inbox: Mutex::new(Inbox {
                 rx,
                 events: VecDeque::new(),
@@ -176,6 +134,7 @@ impl Device {
             operation: Mutex::new(()),
             stop,
             reader: Some(reader),
+            last_sent: Mutex::new(Instant::now()),
         })
     }
 
@@ -215,10 +174,8 @@ impl Device {
     fn send(&self, msg: &Message) -> Result<()> {
         let bytes = msg.encode();
         log::trace!("> {}", hex_preview(&bytes));
-        let mut port = self.writer.lock().unwrap();
-        // No flush: writes to the serial handle are already synchronous, and on Windows a
-        // flush waits for the driver to drain, adding ~120 ms per message.
-        match port.write_all(&bytes) {
+        *self.last_sent.lock().unwrap() = Instant::now();
+        match self.link.write_all(&bytes) {
             Ok(()) => Ok(()),
             Err(e) if matches!(e.kind(), ErrorKind::TimedOut | ErrorKind::Interrupted) => {
                 Err(e.into())
@@ -309,7 +266,18 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
+        // Let the unit's session lapse first (see CLOSE_AFTER_IDLE), unless the port is
+        // already gone: the reader stops when a read fails, as it does on unplugging.
+        if self.reader.as_ref().is_some_and(|r| !r.is_finished()) {
+            let since = self.last_sent.lock().unwrap().elapsed();
+            if let Some(left) = CLOSE_AFTER_IDLE.checked_sub(since) {
+                log::debug!("closing the port in {} ms, once the session has lapsed", left.as_millis());
+                std::thread::sleep(left);
+            }
+        }
         self.stop.store(true, Ordering::Relaxed);
+        // On Windows the reader waits for data without a timeout; wake it.
+        self.link.cancel_read();
         if let Some(handle) = self.reader.take() {
             let _ = handle.join();
         }
@@ -328,11 +296,11 @@ fn push_event(events: &mut VecDeque<Message>, m: Message) {
     events.push_back(m);
 }
 
-fn read_loop(mut port: Box<dyn SerialPort>, tx: mpsc::Sender<Message>, stop: Arc<AtomicBool>) {
+fn read_loop(link: Arc<dyn link::Link>, tx: mpsc::Sender<Message>, stop: Arc<AtomicBool>) {
     let mut decoder = Decoder::new();
     let mut buf = vec![0u8; 64 * 1024];
     while !stop.load(Ordering::Relaxed) {
-        match port.read(&mut buf) {
+        match link.read(&mut buf) {
             Ok(0) => continue,
             Ok(n) => {
                 decoder.push(&buf[..n]);

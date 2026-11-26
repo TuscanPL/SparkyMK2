@@ -14,5 +14,12 @@ log.workspace = true
 serialport = "4"
 
 [target.'cfg(windows)'.dependencies]
-# serialport has no separate write timeout; see open_port.
-windows-sys = { version = "0.52", features = ["Win32_Devices_Communication", "Win32_Foundation"] }
+# The overlapped serial port in link.rs.
+windows-sys = { version = "0.52", features = [
+    "Win32_Devices_Communication",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+    "Win32_Security",
+] }

@@ -126,6 +126,29 @@ before the first write _(?)_.
   - Type uses Linux `d_type` values: 4 = directory, 8 = regular file.
   - `.` and `..` are listed.
 
+### Handles and the host session
+
+From Jeremy Murray-Wakefield's measurements with sp404-drive (issue #13; not re-checked
+here, firmware not noted):
+
+- **Idle handles close.** If no request at all arrives for about 2.2–2.5 s, the unit
+  closes every open handle, on both volumes, without a message. Any request resets the
+  clock, a status poll included; activity on the unit itself does not. Reads and closes
+  on a closed handle answer −1. Handles are small numbers handed out lowest free first,
+  so a later open can reuse a number the host still holds, and reads through it then
+  return the other file's bytes. **Never leave a handle open across a wait**: SparkyMK2
+  opens, reads or writes back to back, and closes.
+- **A file open for reading cannot be reopened** with `0x602` (create/truncate): that
+  open answers −1 until the read handle is closed.
+- **Pad hits push settings.** While a host session is alive (any host message in the
+  last ~2.2 s), each pad hit makes the unit send its project settings (`7D`, 147 bytes)
+  on channel 5, unasked. The pad itself still comes from the `7E` status poll.
+- **Closing the port inside a session can freeze the unit** when pads are being hit
+  quickly (under ~300 ms apart): controls and the power switch stop answering until the
+  port is opened and closed again. SparkyMK2 closes the port only 3 s after its last
+  message.
+- **The internal root** is `""`: `ls ""` lists `FCTRY`, `ROLAND`, …; `/` lists nothing.
+
 ### Device-to-host requests
 
 When rendering a pattern (Bounce/MULTIPAD), the device sends `03 06` write and `03 07` seek
