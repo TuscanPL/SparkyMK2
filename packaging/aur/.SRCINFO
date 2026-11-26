@@ -5,6 +5,7 @@ pkgbase = sparkymk2
 	url = https://github.com/TuscanPL/SparkyMK2
 	install = sparkymk2.install
 	arch = x86_64
+	arch = aarch64
 	license = GPL-3.0-or-later
 	makedepends = cargo
 	makedepends = nodejs

@@ -57,6 +57,7 @@ fn appimage_wayland_preload_fix() {
     let candidates = [
         "/usr/lib64/libwayland-client.so.0",
         "/usr/lib/x86_64-linux-gnu/libwayland-client.so.0",
+        "/usr/lib/aarch64-linux-gnu/libwayland-client.so.0",
         "/usr/lib/libwayland-client.so.0",
     ];
 

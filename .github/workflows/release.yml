@@ -1,4 +1,5 @@
-# Build the Linux packages for a version tag and attach them to a draft GitHub release.
+# Build the packages for a version tag and attach them to a draft GitHub release:
+# Linux (x86_64 and arm64), Windows and macOS.
 # Start it with scripts/release.sh X.Y.Z, then: git push origin main vX.Y.Z
 name: Release
 
@@ -34,7 +35,13 @@ jobs:
   linux:
     needs: notes
     # The oldest supported Ubuntu, so the AppImage and .deb run on older distributions too.
-    runs-on: ubuntu-22.04
+    # Built natively on each architecture: arm64 is for the Raspberry Pi 4/5 and other
+    # 64-bit ARM boards (#15).
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4

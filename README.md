@@ -112,6 +112,7 @@ what they need:
 | Fedora | `sparkymk2-X.Y.Z-1.x86_64.rpm` | `sudo dnf install ./sparkymk2-*.x86_64.rpm` |
 | Arch, CachyOS, Manjaro | from the AUR | `yay -S sparkymk2` or `paru -S sparkymk2` |
 | Other distributions | `sparkymk2_X.Y.Z_amd64.AppImage` | `chmod +x sparkymk2_*.AppImage`, then run it |
+| Raspberry Pi 4/5 and other 64-bit ARM Linux | `sparkymk2_X.Y.Z_arm64.deb`, `sparkymk2-X.Y.Z-1.aarch64.rpm` or `sparkymk2_X.Y.Z_aarch64.AppImage` | as above; needs a 64-bit OS (Raspberry Pi OS 64-bit) |
 | Windows 10 or 11 | `sparkymk2_X.Y.Z_x64-setup.exe` | run it; Windows warns first, because the installer is not signed |
 | macOS, Apple Silicon | `sparkymk2_X.Y.Z_aarch64.dmg` | open it, drag the app to Applications, then see [macOS setup](#macos-setup) |
 
