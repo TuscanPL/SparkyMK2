@@ -183,25 +183,18 @@ function playRate(d: PadDetail): number {
   return (NORMAL_RATE * (param("time-stretch") || 10000)) / 10000;
 }
 
-/** When the shown playback began, in performance.now() time, and how fast it runs. */
-let clock: { began: number; rate: number; frames: number } | null = null;
+/** The playhead's anchor: a report, and how the playhead moves on from it. */
+let clock: { at: number; frame: number; rate: number; direction: 1 | -1 } | null = null;
+/** The report before the latest, to tell which way a ping-pong pad is going. */
+let lastReport: { frames: number; at: number } | null = null;
 
 /**
- * Frames played so far. The playhead runs at a fixed speed from the moment the pad
- * started, worked out from its settings; the device's reports only start it, restart it
- * (the position went back) and put it right if it drifts more than DRIFT_MS.
+ * Where the shown pad is, in frames from the start of its file. The device reports that
+ * position itself (measured: an absolute frame, counting down in Reverse), every few
+ * hundred ms. Between reports the playhead moves on at the fixed speed from the pad's
+ * settings, in the direction it is travelling; reports only re-anchor it when it starts,
+ * turns or drifts more than DRIFT_MS.
  */
-function playedFrames(d: PadDetail, pos: { frames: number; at: number }, now: number): number {
-  const rate = playRate(d);
-  const expected = clock ? clock.frames + (pos.at - clock.began) * clock.rate : 0;
-  const restarted = !clock || pos.frames < clock.frames || clock.rate !== rate;
-  if (restarted || Math.abs(expected - pos.frames) > DRIFT_MS * rate) {
-    clock = { began: pos.at, rate, frames: pos.frames };
-  }
-  const c = clock!;
-  return c.frames + (now - c.began) * c.rate;
-}
-
 function followPlayhead() {
   cancelAnimationFrame(playheadFrame);
   const d = detail.value;
@@ -209,18 +202,38 @@ function followPlayhead() {
   if (!d?.sample || !pos || store.playingPad !== d.index) {
     playhead.value = null;
     clock = null;
+    lastReport = null;
     return;
   }
   const { start, end, loopTop } = d.sample;
   const param = (name: string) => d.params.find((p) => p.name === name)?.value ?? 0;
-  const looping = !!param("loop");
-  const reverse = param("play-mode") === 1;
-  let played = playedFrames(d, pos, performance.now());
-  const length = end - start;
-  if (played >= length) {
-    played = looping ? length - (end - loopTop) + ((played - length) % Math.max(1, end - loopTop)) : length;
+  const mode = param("play-mode"); // 0 forward, 1 reverse, 2/3 ping-pong
+  const rate = playRate(d);
+  if (pos !== lastReport) {
+    // Ping-pong turns at the ends: which way it goes shows between two reports.
+    const moved = lastReport ? pos.frames - lastReport.frames : 0;
+    let direction: 1 | -1 = mode === 1 || mode === 3 ? -1 : 1;
+    if ((mode === 2 || mode === 3) && Math.abs(moved) > 0) direction = moved > 0 ? 1 : -1;
+    const expected = clock ? clock.frame + clock.direction * (pos.at - clock.at) * clock.rate : NaN;
+    if (
+      !clock ||
+      clock.rate !== rate ||
+      clock.direction !== direction ||
+      !(Math.abs(expected - pos.frames) <= DRIFT_MS * rate)
+    ) {
+      clock = { at: pos.at, frame: pos.frames, rate, direction };
+    }
+    lastReport = pos;
   }
-  playhead.value = reverse ? end - played : start + played;
+  const c = clock!;
+  let frame = c.frame + c.direction * (performance.now() - c.at) * c.rate;
+  const looping = !!param("loop");
+  if (c.direction > 0 && frame > end) {
+    frame = looping && end > loopTop ? loopTop + ((frame - end) % (end - loopTop)) : end;
+  } else if (c.direction < 0 && frame < start) {
+    frame = looping && end > start ? end - ((start - frame) % (end - start)) : start;
+  }
+  playhead.value = frame;
   playheadFrame = requestAnimationFrame(followPlayhead);
 }
 
