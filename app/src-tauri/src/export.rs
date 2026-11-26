@@ -15,6 +15,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use sp404_device::Device;
@@ -287,6 +288,103 @@ pub async fn export_pads(
                 folder,
             })
         }
+    })
+    .await
+}
+
+/// Longest a resample runs, for a pad that loops in a way it cannot follow.
+const RESAMPLE_MAX: Duration = Duration::from_secs(60);
+/// Recorded after the pad stops, for its release and effect tails.
+const RESAMPLE_TAIL: Duration = Duration::from_millis(1000);
+
+/// Resample a pad over USB audio: play it on the unit and record what the unit sends to
+/// the computer, so the WAV is the pad as heard, with its playback settings and whatever
+/// effects reach the USB output. Nothing in the project is written or reloaded, so edits
+/// not yet saved on the unit are safe.
+///
+/// The idea of exporting a pad as it sounds comes from spl33t (PR #11), who rendered it
+/// through a temporary pattern; that needs a project reload, which drops unsaved edits
+/// made on the unit, so this records instead. It runs in real time.
+#[tauri::command]
+pub async fn resample_pad(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pad: u16,
+    target: String,
+    folder: String,
+) -> CmdResult<String> {
+    with_device(&state, move |dev| {
+        let pad = pad_index(pad)?;
+        let pad_state = read_pad(dev, pad)?;
+        if pad_state.detail.sample.is_none() {
+            return Err(Failure::Other(format!("{} is empty", label(pad))));
+        }
+        let param = |name: &str| {
+            pad_state.detail.params.iter().find(|p| p.name == name).map_or(0, |p| p.value)
+        };
+        let gate = param("gate") != 0;
+        // Ping-pong turns twice per pass; the others jump back once when they loop.
+        let turns_per_pass = if param("play-mode") >= 2 { 2 } else { 1 };
+        let file = format!("{} {} resampled.wav", label(pad), sanitize(&pad_state.detail.name));
+        emit(&app, &file, 0, 1);
+
+        let recording = crate::audio::record_sampler().map_err(Failure::Other)?;
+        // The input takes a moment to deliver; start the pad once it does.
+        std::thread::sleep(Duration::from_millis(150));
+        dev.preview_start(pad)?;
+        // Gate off plays on after the release; Gate on is held until it is done.
+        if !gate {
+            dev.preview_stop(pad)?;
+        }
+        let started = Instant::now();
+        let mut heard = false;
+        let mut last: Option<u32> = None;
+        let mut direction = 0i64;
+        let mut turns = 0;
+        loop {
+            std::thread::sleep(Duration::from_millis(40));
+            let position = dev.activity()?.position;
+            // The first report can still be the previous play's position.
+            if started.elapsed() < Duration::from_millis(120) {
+                continue;
+            }
+            match (position, last) {
+                (None, _) if heard => break,
+                (None, _) if started.elapsed() > Duration::from_secs(2) => break,
+                (Some(now), Some(before)) if now != before => {
+                    let moved = (i64::from(now) - i64::from(before)).signum();
+                    if direction != 0 && moved != direction {
+                        turns += 1;
+                    }
+                    direction = moved;
+                }
+                _ => {}
+            }
+            heard |= position.is_some();
+            last = position.or(last);
+            if turns >= turns_per_pass || started.elapsed() > RESAMPLE_MAX {
+                break;
+            }
+        }
+        // Let go and cut off whatever is still sounding (a loop, or a held Gate-on pad).
+        dev.preview_stop(pad)?;
+        if dev.activity()?.position.is_some() && !gate {
+            dev.halt_pad(pad)?;
+        }
+        std::thread::sleep(RESAMPLE_TAIL);
+        let samples = recording.finish().ok_or_else(|| {
+            Failure::Other(
+                "Nothing was heard from the SP-404MKII over USB audio. Check that the unit sends its \
+                 output over USB, and that its volume is up."
+                    .into(),
+            )
+        })?;
+        let wav = wav::to_bytes(&Sample { channels: 2, samples })?;
+        let place = Place::new(&target, &folder)?;
+        place.create(dev)?;
+        place.write(dev, &file, &wav)?;
+        emit(&app, &file, 1, 1);
+        Ok(file)
     })
     .await
 }

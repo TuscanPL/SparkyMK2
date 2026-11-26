@@ -334,6 +334,9 @@ export const api = {
   soundOutputs: () => invoke<AudioOutput[]>("sound_outputs"),
   /** Pass the SP-404MKII's USB audio to `output`, or stop; answers the output's name. */
   soundMonitor: (enabled: boolean, output: string | null) => invoke<string>("sound_monitor", { enabled, output }),
+  /** Play a pad and record it over USB audio; answers the file name. */
+  resamplePad: (pad: number, target: Place, folder: string) =>
+    invoke<string>("resample_pad", { pad, target, folder }),
   exportPads: (pads: number[], target: Place, folder: string, sidecar: boolean) =>
     invoke<ExportSummary>("export_pads", { pads, target, folder, sidecar }),
   readExport: (target: Place, folder: string) => invoke<ExportSheet>("read_export", { target, folder }),

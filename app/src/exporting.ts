@@ -81,6 +81,33 @@ export async function exportSounds(scope: ExportScope, indices: number[]) {
   }
 }
 
+/**
+ * Resample a pad: the unit plays it and the app records what it sends over USB audio, so
+ * the WAV is the pad as heard, with its settings and effects. Nothing in the project
+ * changes. The idea of exporting a pad as it sounds is spl33t's (PR #11).
+ */
+export async function resampleSound(index: number) {
+  if (!store.pads[index]?.hasSample) return;
+  const place = await choosePlace(
+    `Resample pad ${padLabel(index)}`,
+    "The SP-404MKII plays this pad and the app records it over USB audio, so the WAV sounds as the pad does: pitch, stretch, envelope and the effects on the unit's output included. It takes as long as the pad plays; keep other sounds on the unit quiet meanwhile.",
+  );
+  if (!place) return;
+  store.pending++;
+  store.working[index] = "Resampling";
+  try {
+    const file = await api.resamplePad(index, place.target, place.base);
+    const where = place.target === "card" ? `the SD card, ${place.base}` : place.base;
+    notify(`${file} saved to ${where}`, "info");
+  } catch (e) {
+    notify(errorText(e));
+  } finally {
+    store.pending--;
+    delete store.working[index];
+    store.transfer = null;
+  }
+}
+
 /** Put an export back: every sound on the pad it came from, with its settings. */
 export async function restoreExport(target: Place, folder: string) {
   let sheet;

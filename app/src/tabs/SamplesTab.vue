@@ -9,7 +9,7 @@ import ParamField from "../components/ParamField.vue";
 import WaveformView from "../components/WaveformView.vue";
 import { api, type PadDetail } from "../api";
 import { BANK_LETTERS, BPM_RANGES, PARAM_GROUPS, SAMPLE_NAME_LEN, bpm, duration } from "../format";
-import { exportSounds, restoreFromComputer } from "../exporting";
+import { exportSounds, resampleSound, restoreFromComputer } from "../exporting";
 import { drag, pressPad } from "../drag";
 import {
   analyzeBpm,
@@ -384,6 +384,13 @@ async function commitChops(points: number[]) {
               <button :disabled="locked" title="Raise the sample's level to full scale, on the device. Can't be undone." @click="padOperation(detail.index, 'normalize')">Normalize</button>
               <button :disabled="store.pending > 0" title="Save this pad's sample as a WAV" @click="exportSounds('pad', [detail.index])">
                 Export…
+              </button>
+              <button
+                :disabled="store.pending > 0"
+                title="Play this pad on the unit and record it over USB audio, as it sounds"
+                @click="resampleSound(detail.index)"
+              >
+                Resample…
               </button>
               <button class="danger" :disabled="locked" title="Erase the sample from this pad. Files on the SD card are not touched." @click="padOperation(detail.index, 'delete')">Delete</button>
             </div>

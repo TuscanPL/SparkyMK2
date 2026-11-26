@@ -523,3 +523,89 @@ fn build_monitor_output<T: SizedSample + FromSample<f32>>(
         None,
     )
 }
+
+/// A recording of the SP-404MKII's USB audio input, for resampling a pad over USB.
+/// Made and finished on one thread, as cpal streams may not move between threads.
+pub struct Recording {
+    _stream: cpal::Stream,
+    frames: Arc<Mutex<Vec<[f32; 2]>>>,
+    rate: u32,
+}
+
+/// Start recording what the unit sends over USB audio.
+pub fn record_sampler() -> Result<Recording, String> {
+    let host = cpal::default_host();
+    let input = host
+        .input_devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| is_sampler(&d.to_string()) && !is_monitor_source(d))
+        .ok_or("the SP-404MKII's USB audio input was not found")?;
+    let config = input.default_input_config().map_err(|e| format!("{input}: {e}"))?;
+    let channels = usize::from(config.channels().max(1));
+    let rate = config.sample_rate();
+    let frames = Arc::new(Mutex::new(Vec::<[f32; 2]>::new()));
+    let sink = frames.clone();
+    let push = Arc::new(Mutex::new(move |it: &mut dyn Iterator<Item = [f32; 2]>| {
+        sink.lock().unwrap().extend(it);
+    }));
+    let build = |stream_config: cpal::StreamConfig| {
+        let push = push.clone();
+        let push = move |it: &mut dyn Iterator<Item = [f32; 2]>| (push.lock().unwrap())(it);
+        match config.sample_format() {
+            SampleFormat::I16 => build_input::<i16>(&input, stream_config, channels, push),
+            SampleFormat::I32 => build_input::<i32>(&input, stream_config, channels, push),
+            SampleFormat::F32 => build_input::<f32>(&input, stream_config, channels, push),
+            _ => Err(cpal::Error::from(cpal::ErrorKind::UnsupportedConfig)),
+        }
+    };
+    let stream = build(small_buffers(config.config()))
+        .or_else(|_| build(config.config()))
+        .map_err(|e| format!("{input}: {e}"))?;
+    stream.play().map_err(|e| format!("{input}: {e}"))?;
+    log::info!("audio: recording {input} at {rate} Hz");
+    Ok(Recording { _stream: stream, frames, rate })
+}
+
+/// Below this (about −66 dBFS) a frame counts as silence when trimming.
+const SILENCE: f32 = 1.0 / 2048.0;
+
+impl Recording {
+    /// Stop and answer the sound as 48 kHz 16-bit stereo, trimmed of the silence before
+    /// it starts (keeping 5 ms) and after it ends (keeping 50 ms). `None` if nothing above
+    /// silence came in.
+    pub fn finish(self) -> Option<Vec<i16>> {
+        let Recording { _stream: stream, frames, rate } = self;
+        drop(stream);
+        let frames = std::mem::take(&mut *frames.lock().unwrap());
+        let frames = to_48k(frames, rate);
+        let loud = |f: &[f32; 2]| f[0].abs() > SILENCE || f[1].abs() > SILENCE;
+        let first = frames.iter().position(loud)?;
+        let last = frames.iter().rposition(loud)?;
+        let from = first.saturating_sub(240);
+        let to = (last + 2_400).min(frames.len() - 1);
+        Some(
+            frames[from..=to]
+                .iter()
+                .flat_map(|f| f.map(|v| (v.clamp(-1.0, 1.0) * 32767.0) as i16))
+                .collect(),
+        )
+    }
+}
+
+/// Linear resampling to the device's rate; the unit itself sends 48 kHz.
+fn to_48k(frames: Vec<[f32; 2]>, rate: u32) -> Vec<[f32; 2]> {
+    if rate == 48_000 || frames.len() < 2 {
+        return frames;
+    }
+    let step = f64::from(rate) / SOURCE_RATE;
+    let out_len = ((frames.len() - 1) as f64 / step) as usize;
+    (0..out_len)
+        .map(|n| {
+            let pos = n as f64 * step;
+            let i = pos as usize;
+            let t = (pos - i as f64) as f32;
+            let (a, b) = (frames[i], frames[(i + 1).min(frames.len() - 1)]);
+            [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+        })
+        .collect()
+}

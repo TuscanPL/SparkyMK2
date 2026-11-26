@@ -151,6 +151,7 @@ pub fn run() {
             files::sound_outputs,
             files::sound_monitor,
             export::export_pads,
+            export::resample_pad,
             export::read_export,
             export::restore_pads,
             export::export_pattern,
