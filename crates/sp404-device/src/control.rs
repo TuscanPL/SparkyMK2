@@ -12,6 +12,8 @@ use crate::{Device, Error, Result, is_channel};
 
 const TIMEOUT: Duration = Duration::from_secs(3);
 const PROJECTS: usize = 16;
+/// Pad parameter id of Gate (`params::PARAMS`).
+const GATE: u8 = 0x6A;
 
 /// Summary of the device state from the status poll and project settings.
 /// What the device is doing, from the status poll alone: cheap enough to ask several
@@ -206,6 +208,20 @@ impl Device {
             p.len() >= 4 && p[0] == reply::PREVIEW_STOP && p[1..3] == id
         })?;
         Ok(())
+    }
+
+    /// Cut off a pad that keeps sounding after [`Device::preview_stop`] because its Gate is
+    /// off. Pressing it again only restarts it, and neither velocity 0 nor MIDI All Sound
+    /// Off stops it, so Gate is switched on for one press and release, then off again.
+    /// Releasing with Gate on but no new press does not stop it either (fw 5.52).
+    pub fn halt_pad(&self, pad: PadIndex) -> Result<()> {
+        self.set_param(GATE, Target::Pad(pad), 1)?;
+        let pressed = self
+            .preview_start(pad)
+            .and_then(|()| self.preview_stop(pad));
+        // Gate goes back off even when the press failed.
+        let restored = self.set_param(GATE, Target::Pad(pad), 0);
+        pressed.and(restored)
     }
 
     /// Move a pad's sample onto another pad, replacing or exchanging with the destination.

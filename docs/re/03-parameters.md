@@ -53,11 +53,11 @@ A long message on channel `0x05`. The device echoes the same payload back.
 | Bit | Value | Meaning |
 |---|---|---|
 | 0 | 1 | Fixed Velocity |
-| 3 | 8 | Chromatic Mode, non-default option |
-| 4 | 16 | Chromatic Mode, non-default option |
+| 3 | 8 | Chromatic Mode: Legato |
+| 4 | 16 | Chromatic Mode: Poly |
 | 5 | 32 | One Shot |
 
-When Chromatic Mode is Mono, bits 3 and 4 are both clear.
+When Chromatic Mode is Mono, bits 3 and 4 are both clear. Verified on the unit (fw 5.52, 2026-11-26): a pad set to Legato on the SP read 8, one set to Poly read 16.
 
 **App-side side effects to replicate.** Enabling One Shot also sends Gate = 0, Loop = 0
 and `72` = 0.

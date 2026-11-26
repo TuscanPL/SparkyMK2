@@ -175,7 +175,7 @@ Short payloads below are listed without the length byte.
 | 1 | current project, 0-based (`05` = project 6); confirmed by selecting project 12 (`0B`) |
 | 3 | selected bank; confirmed |
 | 5 | selected pad; confirmed |
-| 8–11 | u32 LE: frames played so far by the pad sounding, `FFFFFFFF` when none is; confirmed |
+| 8–11 | u32 LE: frames played so far by the pad sounding, `FFFFFFFF` when none is; confirmed. It advances at 48 frames/ms × speed, where speed is tempo ÷ pad BPM with BPM Sync on (Time Stretch then ignored), else Time Stretch %; Pitch and Vinyl leave it unchanged (measured on fw 5.52, 2026-11-26) |
 | 12 | working mode (`04` while the device showed a settings screen, `00` otherwise) |
 
 Bytes 3, 5 and 8–11 were confirmed on firmware 5.52 on 2026-09-24 by polling every
