@@ -203,6 +203,74 @@ pub async fn move_sample(
     .await
 }
 
+/// Set one BPM on many pads. Empty pads and pads in protected banks are left alone.
+/// Answers how many pads were set.
+#[tauri::command]
+pub async fn set_bpm_on_pads(
+    state: State<'_, AppState>,
+    pads: Vec<u16>,
+    value: i32,
+) -> CmdResult<usize> {
+    with_device(&state, move |dev| {
+        if !BPM_RANGE.contains(&value) {
+            return Err(format!(
+                "BPM must be in {}..{}",
+                BPM_RANGE.start() / 100,
+                BPM_RANGE.end() / 100
+            )
+            .into());
+        }
+        let settings = dev.project_settings(dev.current_project()?)?;
+        let mut set = 0;
+        for pad in pads {
+            let pad = pad_index(pad)?;
+            if settings.bank(usize::from(pad.bank())).protected || !dev.pad_block(pad)?.has_sample()
+            {
+                continue;
+            }
+            dev.set_param(BPM, Target::Pad(pad), value)?;
+            set += 1;
+        }
+        Ok(set)
+    })
+    .await
+}
+
+/// Swap the samples of two whole banks, pad by pad: A1 with D1, A2 with D2 and so on.
+/// Bank tempo and volume stay with their bank, and patterns are not touched.
+#[tauri::command]
+pub async fn swap_banks(state: State<'_, AppState>, a: u16, b: u16) -> CmdResult<()> {
+    with_device(&state, move |dev| {
+        if a == b {
+            return Ok(());
+        }
+        let settings = dev.project_settings(dev.current_project()?)?;
+        for bank in [a, b] {
+            if bank >= sp404_proto::pad::BANKS {
+                return Err(format!("there is no bank {bank}").into());
+            }
+            if settings.bank(usize::from(bank)).protected {
+                return Err(format!("bank {} is protected", letter(bank)).into());
+            }
+        }
+        for i in 0..sp404_proto::pad::PADS_PER_BANK {
+            // Both banks were checked above, so every pad in them exists.
+            let pa = PadIndex::from_bank_pad(a, i).unwrap();
+            let pb = PadIndex::from_bank_pad(b, i).unwrap();
+            let has_a = dev.pad_block(pa)?.has_sample();
+            let has_b = dev.pad_block(pb)?.has_sample();
+            match (has_a, has_b) {
+                (true, true) => dev.move_sample(pa, pb, MoveMode::Exchange)?,
+                (true, false) => dev.move_sample(pa, pb, MoveMode::Overwrite)?,
+                (false, true) => dev.move_sample(pb, pa, MoveMode::Overwrite)?,
+                (false, false) => {}
+            }
+        }
+        Ok(())
+    })
+    .await
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {

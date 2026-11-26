@@ -31,6 +31,7 @@ function click(index: number) {
         :key="n"
         class="pad"
         :data-pad="props.droppable ? padIndex(props.bank, n) : undefined"
+        :title="props.droppable ? 'Drag onto another pad to move or swap. Drop audio files here to import.' : undefined"
         :class="{
           filled: props.filled(padIndex(props.bank, n)),
           selected: props.selected === padIndex(props.bank, n),

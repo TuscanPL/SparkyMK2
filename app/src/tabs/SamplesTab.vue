@@ -7,12 +7,13 @@ import PadGrid from "../components/PadGrid.vue";
 import SoundBrowser from "../components/SoundBrowser.vue";
 import ParamField from "../components/ParamField.vue";
 import WaveformView from "../components/WaveformView.vue";
-import { api } from "../api";
+import { api, type PadDetail } from "../api";
 import { BANK_LETTERS, BPM_RANGES, PARAM_GROUPS, SAMPLE_NAME_LEN, bpm, duration } from "../format";
 import { exportSounds, restoreFromComputer } from "../exporting";
 import { drag, pressPad } from "../drag";
 import {
   analyzeBpm,
+  copyBpm,
   editBlock,
   handleError,
   padOperation,
@@ -48,9 +49,10 @@ const busy = computed(() => (index.value !== null ? store.working[index.value] :
 const locked = computed(() => !!blocked.value || !!busy.value);
 /** Pad the device is playing for Preview, or null. */
 const previewing = ref<number | null>(null);
-/** Frame the preview has reached, for the waveform's playhead. */
-const playhead = ref<number | null>(null);
-let playheadFrame = 0;
+/** The previewed pad has Gate off, so letting go does not stop it and Stop must cut it off. */
+let previewLatched = false;
+/** Ends a preview that would otherwise run on. */
+let previewTimer: number | undefined;
 const wave = ref<InstanceType<typeof WaveformView> | null>(null);
 
 const groups = computed(() => {
@@ -92,12 +94,14 @@ const PREVIEW_MAX_MS = 60_000;
 /** Play the pad on the device from start to end, or stop it if it is playing. */
 async function preview() {
   if (previewing.value !== null) return stopPreview();
+  if (soundingOnDevice.value) return stopDevicePlay();
   const d = detail.value;
   if (!d?.sample) return;
   const { start, end } = d.sample;
-  // The playhead runs at 48 kHz from the start point; pitch and speed are not followed.
-  const ms = Math.min(PREVIEW_MAX_MS, Math.max(300, (end - start) / 48));
+  // As long as Start–End takes at the pad's speed (BPM Sync or Time Stretch).
+  const ms = Math.min(PREVIEW_MAX_MS, Math.max(300, (end - start) / playRate(d)));
   previewing.value = d.index;
+  previewLatched = d.params.find((p) => p.name === "gate")?.value === 0;
   try {
     await api.previewStart(d.index);
   } catch (e) {
@@ -105,35 +109,123 @@ async function preview() {
     handleError(e);
     return;
   }
-  const began = performance.now();
-  const tick = () => {
-    if (previewing.value !== d.index) return;
-    const elapsed = performance.now() - began;
-    if (elapsed >= ms) {
-      stopPreview();
-      return;
-    }
-    playhead.value = Math.min(end, start + elapsed * 48);
-    playheadFrame = requestAnimationFrame(tick);
-  };
-  playheadFrame = requestAnimationFrame(tick);
+  previewTimer = window.setTimeout(() => {
+    if (previewing.value === d.index) stopPreview();
+  }, ms);
 }
 
 async function stopPreview() {
   const pad = previewing.value;
   if (pad === null) return;
   previewing.value = null;
-  playhead.value = null;
-  cancelAnimationFrame(playheadFrame);
+  window.clearTimeout(previewTimer);
+  forgetPlaying(pad);
   try {
-    await api.previewStop(pad);
+    await api.previewStop(pad, previewLatched);
   } catch (e) {
     handleError(e);
   }
 }
 
-// Picking another pad or leaving the tab ends the preview, as letting go of a pad would.
+/** The shown pad is sounding because it was hit on the unit, not by Preview here. */
+const soundingOnDevice = computed(
+  () => previewing.value === null && index.value !== null && store.playingPad === index.value,
+);
+
+/** Stop a pad that was hit on the unit. Only a Gate-off pad needs cutting off; a Gate-on
+ * one stops when the pad is let go, and halting it would leave its Gate switched off. */
+async function stopDevicePlay() {
+  const d = detail.value;
+  if (!d) return;
+  forgetPlaying(d.index);
+  try {
+    await api.previewStop(d.index, d.params.find((p) => p.name === "gate")?.value === 0);
+  } catch (e) {
+    handleError(e);
+  }
+}
+
+/** Show the pad as stopped at once, instead of until the next status poll. */
+function forgetPlaying(pad: number) {
+  if (store.playingPad !== pad) return;
+  store.playingPad = null;
+  store.playPosition = null;
+}
+
+/** The Preview button shows Stop: a preview from here, or the pad hit on the unit. */
+const sounding = computed(() => previewing.value !== null || soundingOnDevice.value);
+
+// Picking another pad or leaving the tab ends the preview, as Stop does.
 watch(index, stopPreview);
+
+/** Frame the shown pad has reached while it sounds, whether started here or on the unit. */
+const playhead = ref<number | null>(null);
+let playheadFrame = 0;
+
+/** Frames played per millisecond at normal speed. */
+const NORMAL_RATE = 48;
+/** Further than this from a report (in ms of playback), the playhead is put right. */
+const DRIFT_MS = 250;
+
+/**
+ * How fast the pad's play position moves, from its settings. Measured on the unit
+ * (fw 5.52): with BPM Sync on, tempo ÷ pad BPM (the bank's or the project's tempo, as
+ * Tempo Select says) and Time Stretch is ignored; with it off, Time Stretch %. Pitch
+ * and Vinyl do not change it.
+ */
+function playRate(d: PadDetail): number {
+  const param = (name: string) => d.params.find((p) => p.name === name)?.value ?? 0;
+  const st = store.status;
+  if (param("bpm-sync") && st && param("bpm") > 0) {
+    const tempo = st.usesProjectTempo ? st.projectTempo : (st.banks[Math.floor(d.index / 16)]?.tempo ?? 0);
+    if (tempo > 0) return (NORMAL_RATE * tempo) / param("bpm");
+  }
+  return (NORMAL_RATE * (param("time-stretch") || 10000)) / 10000;
+}
+
+/** When the shown playback began, in performance.now() time, and how fast it runs. */
+let clock: { began: number; rate: number; frames: number } | null = null;
+
+/**
+ * Frames played so far. The playhead runs at a fixed speed from the moment the pad
+ * started, worked out from its settings; the device's reports only start it, restart it
+ * (the position went back) and put it right if it drifts more than DRIFT_MS.
+ */
+function playedFrames(d: PadDetail, pos: { frames: number; at: number }, now: number): number {
+  const rate = playRate(d);
+  const expected = clock ? clock.frames + (pos.at - clock.began) * clock.rate : 0;
+  const restarted = !clock || pos.frames < clock.frames || clock.rate !== rate;
+  if (restarted || Math.abs(expected - pos.frames) > DRIFT_MS * rate) {
+    clock = { began: pos.at, rate, frames: pos.frames };
+  }
+  const c = clock!;
+  return c.frames + (now - c.began) * c.rate;
+}
+
+function followPlayhead() {
+  cancelAnimationFrame(playheadFrame);
+  const d = detail.value;
+  const pos = store.playPosition;
+  if (!d?.sample || !pos || store.playingPad !== d.index) {
+    playhead.value = null;
+    clock = null;
+    return;
+  }
+  const { start, end, loopTop } = d.sample;
+  const param = (name: string) => d.params.find((p) => p.name === name)?.value ?? 0;
+  const looping = !!param("loop");
+  const reverse = param("play-mode") === 1;
+  let played = playedFrames(d, pos, performance.now());
+  const length = end - start;
+  if (played >= length) {
+    played = looping ? length - (end - loopTop) + ((played - length) % Math.max(1, end - loopTop)) : length;
+  }
+  playhead.value = reverse ? end - played : start + played;
+  playheadFrame = requestAnimationFrame(followPlayhead);
+}
+
+watch(() => [store.playPosition, store.playingPad, detail.value], followPlayhead);
+onUnmounted(() => cancelAnimationFrame(playheadFrame));
 onUnmounted(stopPreview);
 
 async function commitParam(name: string, value: number) {
@@ -142,6 +234,16 @@ async function commitParam(name: string, value: number) {
 
 async function commitPoint(name: string, frame: number) {
   if (index.value !== null) await setPadParam(index.value, name, frame);
+  wave.value?.reset();
+}
+
+/** A pad parameter's value, or null when the pad has none (an empty pad). */
+function paramValue(name: string): number | null {
+  return detail.value?.params.find((p) => p.name === name)?.value ?? null;
+}
+
+async function commitEnvelope(name: "attack" | "release", value: number) {
+  if (index.value !== null) await setPadParam(index.value, name, value);
   wave.value?.reset();
 }
 
@@ -187,10 +289,10 @@ async function commitChops(points: number[]) {
             </p>
             <label class="row">
               <input v-model="store.prefs.detectBpm" type="checkbox" @change="savePrefs" />
-              Detect BPM after import
+              <span title="Set each imported sample's BPM by listening to it">Detect BPM after import</span>
             </label>
             <label class="row">
-              <span class="muted">BPM range</span>
+              <span class="muted" title="Where detection looks for a tempo; a half or double tempo is folded into this range">BPM range</span>
               <select v-model.number="store.prefs.bpmRange" @change="savePrefs">
                 <option v-for="[value, label] in BPM_RANGES" :key="value" :value="value">{{ label }}</option>
               </select>
@@ -202,6 +304,7 @@ async function commitChops(points: number[]) {
                 <button
                   class="small"
                   :disabled="store.pending > 0 || !counts[store.bank]"
+                  title="Save every sample in this bank as WAV files on this computer"
                   @click="exportSounds('bank', bankPads)"
                 >
                   Bank {{ BANK_LETTERS[store.bank] }}
@@ -209,6 +312,7 @@ async function commitChops(points: number[]) {
                 <button
                   class="small"
                   :disabled="store.pending > 0 || !store.pads.some((p) => p.hasSample)"
+                  title="Save every sample in the project as WAV files on this computer"
                   @click="exportSounds('project', allPads)"
                 >
                   Project
@@ -259,16 +363,16 @@ async function commitChops(points: number[]) {
             </div>
             <span v-if="store.detailLoading || busy" class="status muted"><span class="spinner" />{{ busy }}</span>
             <div v-if="detail?.sample" class="actions">
-              <button :title="previewing === null ? 'Play the pad on the device' : 'Stop the pad'" @click="preview">
-                <Icon :name="previewing === null ? 'play' : 'stop'" :size="14" />
-                {{ previewing === null ? "Preview" : "Stop" }}
+              <button :title="sounding ? 'Stop the pad' : 'Play the pad on the device'" @click="preview">
+                <Icon :name="sounding ? 'stop' : 'play'" :size="14" />
+                {{ sounding ? "Stop" : "Preview" }}
               </button>
-              <button :disabled="locked" @click="padOperation(detail.index, 'truncate')">Truncate</button>
-              <button :disabled="locked" @click="padOperation(detail.index, 'normalize')">Normalize</button>
+              <button :disabled="locked" title="Cut away the audio before Start and after End, on the device. Can't be undone." @click="padOperation(detail.index, 'truncate')">Truncate</button>
+              <button :disabled="locked" title="Raise the sample's level to full scale, on the device. Can't be undone." @click="padOperation(detail.index, 'normalize')">Normalize</button>
               <button :disabled="store.pending > 0" title="Save this pad's sample as a WAV" @click="exportSounds('pad', [detail.index])">
                 Export…
               </button>
-              <button class="danger" :disabled="locked" @click="padOperation(detail.index, 'delete')">Delete</button>
+              <button class="danger" :disabled="locked" title="Erase the sample from this pad. Files on the SD card are not touched." @click="padOperation(detail.index, 'delete')">Delete</button>
             </div>
           </header>
 
@@ -282,8 +386,11 @@ async function commitChops(points: number[]) {
               :loading="store.waveLoading"
               :editable="!locked"
               :playhead="playhead"
+              :attack="paramValue('attack')"
+              :release="paramValue('release')"
               @point="commitPoint"
               @chops="commitChops"
+              @envelope="commitEnvelope"
             />
             <div class="wave-bar">
               <div class="points">
@@ -291,6 +398,11 @@ async function commitChops(points: number[]) {
                 <div><span class="label">End</span><span class="mono">{{ duration(detail.sample.end) }}</span></div>
                 <div><span class="label">Loop top</span><span class="mono">{{ duration(detail.sample.loopTop) }}</span></div>
                 <div><span class="label">Chops</span><span class="mono">{{ detail.sample.chopPoints.length }} / 16</span></div>
+              </div>
+              <div class="zoom">
+                <button class="ghost small" title="Zoom out (or scroll down on the wave)" @click="wave?.zoom(0.5)">−</button>
+                <button class="ghost small" title="Zoom in (or scroll up on the wave)" @click="wave?.zoom(2)">+</button>
+                <button class="ghost small" :disabled="!wave?.zoomed" title="Show the whole sample" @click="wave?.fit()">Fit</button>
               </div>
               <button
                 class="ghost small"
@@ -301,7 +413,7 @@ async function commitChops(points: number[]) {
               </button>
             </div>
             <p v-if="!locked" class="muted hint">
-              Drag S, E and L to move Start, End and Loop top. Double-click to add a chop point; drag it to move it, right-click it to remove it. The chop at the very start is kept until you clear all chops.
+              Drag S, E and L to move Start, End and Loop top. Double-click to add a chop point; drag it to move it, right-click it to remove it. The chop at the very start is kept until you clear all chops. Drag the A and R diamonds to set Attack and Release (they show the 0–127 value, not a time). Scroll on the wave to zoom, Shift+scroll to move along.
             </p>
 
             <div class="groups">
@@ -325,8 +437,9 @@ async function commitChops(points: number[]) {
                       </span>
                     </div>
                     <div v-if="p.name === 'bpm'" class="bpm-tools">
-                      <button class="small" :disabled="locked" @click="analyzeBpm(detail.index, 'detect')">Detect</button>
+                      <button class="small" :disabled="locked" title="Listen to the sample and set the tempo it finds" @click="analyzeBpm(detail.index, 'detect')">Detect</button>
                       <button class="small" :disabled="locked" title="Whole beats that fit between Start and End" @click="analyzeBpm(detail.index, 'length')">From Start–End</button>
+                      <button class="small" :disabled="locked" title="Give this BPM to the other pads in this bank or in the whole project" @click="copyBpm(detail.index)">Use for…</button>
                     </div>
                   </template>
                 </div>
@@ -557,6 +670,11 @@ label.row:first-of-type {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.zoom {
+  display: flex;
+  gap: 2px;
 }
 
 .points {

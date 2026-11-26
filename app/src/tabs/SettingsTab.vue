@@ -7,7 +7,7 @@ import Icon from "../components/Icon.vue";
 import { BANK_LETTERS, PROJECT_NAME_LEN, bpm, storage } from "../format";
 import { backupProject, restoreBackup } from "../exporting";
 import { api, errorText, setLoggingActive, type ClearParts, type LoggingState } from "../api";
-import { clearProject, loadLibrary, renameProject, savePrefs, setGlobalParam, setLibraryDir, store } from "../store";
+import { clearProject, loadLibrary, renameProject, savePrefs, setGlobalParam, setLibraryDir, store, swapBanks } from "../store";
 
 /** Shown so a bug report can say which version it is about. */
 const version = ref("");
@@ -90,8 +90,10 @@ async function onClear() {
 const tempoText = ref<Record<string, string>>({});
 const volumeDraft = ref<Record<string, number>>({});
 
+// Only a project change drops what is being typed: the status refreshes every few
+// seconds, and clearing on that threw away half-typed tempos.
 watch(
-  () => store.status,
+  () => store.status?.project,
   () => {
     tempoText.value = {};
     volumeDraft.value = {};
@@ -110,10 +112,18 @@ function commitTempo(name: string, current: number) {
   if (Number.isFinite(value) && value >= 4000 && value <= 20000 && value !== current) setGlobalParam(name, value);
 }
 
-function commitVolume(letter: string, current: number) {
+function onSwap(bank: number, select: HTMLSelectElement) {
+  const other = Number(select.value);
+  // The menu is an action, not a setting: it goes back to "—" either way.
+  select.value = "";
+  void swapBanks(bank, other);
+}
+
+async function commitVolume(letter: string, current: number) {
   const name = `bank-volume-${letter.toLowerCase()}`;
   const value = volumeDraft.value[name];
-  if (value !== undefined && value !== current) setGlobalParam(name, value);
+  if (value !== undefined && value !== current) await setGlobalParam(name, value);
+  if (volumeDraft.value[name] === value) delete volumeDraft.value[name];
 }
 </script>
 
@@ -134,7 +144,7 @@ function commitVolume(letter: string, current: number) {
       </div>
       <div class="fields">
         <label class="field">
-          <span>Tempo source</span>
+          <span title="Whether pads follow each bank's own tempo or one tempo for the whole project">Tempo source</span>
           <select
             :value="store.status.usesProjectTempo ? 1 : 0"
             :disabled="locked()"
@@ -169,7 +179,7 @@ function commitVolume(letter: string, current: number) {
         cannot be undone: export what you want to keep first.
       </p>
       <label class="field scope">
-        <span>From</span>
+        <span title="Clear the whole project, or only one bank's samples and patterns">From</span>
         <select v-model="parts.bank">
           <option :value="null">The whole project</option>
           <option v-for="(letter, i) in BANK_LETTERS" :key="letter" :value="i">Bank {{ letter }} only</option>
@@ -207,8 +217,8 @@ function commitVolume(letter: string, current: number) {
         project {{ store.status.project }}.
       </p>
       <div class="backup-buttons">
-        <button :disabled="store.pending > 0" @click="backupProject">Back up project {{ store.status.project }}…</button>
-        <button class="danger" :disabled="store.pending > 0 || locked()" @click="restoreBackup">Restore a backup…</button>
+        <button :disabled="store.pending > 0" title="Copy the project's whole folder to this computer" @click="backupProject">Back up project {{ store.status.project }}…</button>
+        <button class="danger" :disabled="store.pending > 0 || locked()" title="Replace everything in this project with a backup" @click="restoreBackup">Restore a backup…</button>
       </div>
       <p v-if="store.transfer && store.pending > 0" class="muted progress">
         <span class="spinner" /> {{ store.transfer.name }} ({{ store.transfer.done + 1 }} of {{ store.transfer.total }})
@@ -233,13 +243,14 @@ function commitVolume(letter: string, current: number) {
         <thead>
           <tr>
             <th>Bank</th>
-            <th>Tempo (BPM)</th>
-            <th>Volume</th>
-            <th>Protect</th>
+            <th title="The bank's tempo, used when Tempo source is Bank tempo">Tempo (BPM)</th>
+            <th title="Overall level of the bank's pads">Volume</th>
+            <th title="Protects the bank's samples from being changed or deleted">Protect</th>
+            <th>Swap with</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="b in store.status.banks" :key="b.letter">
+          <tr v-for="(b, i) in store.status.banks" :key="b.letter">
             <td class="letter">{{ b.letter }}</td>
             <td>
               <input
@@ -279,6 +290,20 @@ function commitVolume(letter: string, current: number) {
                 </span>
                 <Icon v-if="b.protected" name="lock" :size="13" />
               </label>
+            </td>
+            <td>
+              <select
+                class="swap"
+                value=""
+                :disabled="locked() || b.protected"
+                :title="`Trade every pad of bank ${b.letter} with the same pad of another bank`"
+                @change="onSwap(i, $event.target as HTMLSelectElement)"
+              >
+                <option value="" disabled>—</option>
+                <template v-for="(o, j) in store.status.banks" :key="o.letter">
+                  <option v-if="j !== i && !o.protected" :value="j">{{ o.letter }}</option>
+                </template>
+              </select>
             </td>
           </tr>
         </tbody>

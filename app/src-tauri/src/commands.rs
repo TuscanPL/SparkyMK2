@@ -441,10 +441,20 @@ pub async fn preview_start(state: State<'_, AppState>, pad: u16) -> CmdResult<()
     with_device(&state, move |dev| Ok(dev.preview_start(pad_index(pad)?)?)).await
 }
 
-/// Stop a pad started with [`preview_start`].
+/// Stop a pad started with [`preview_start`]. With `halt`, a pad still sounding after
+/// the release (Gate off) is cut off too; without, it plays on as it would on the unit.
 #[tauri::command]
-pub async fn preview_stop(state: State<'_, AppState>, pad: u16) -> CmdResult<()> {
-    with_device(&state, move |dev| Ok(dev.preview_stop(pad_index(pad)?)?)).await
+pub async fn preview_stop(state: State<'_, AppState>, pad: u16, halt: bool) -> CmdResult<()> {
+    with_device(&state, move |dev| {
+        let pad = pad_index(pad)?;
+        dev.preview_stop(pad)?;
+        // A one-shot may have ended by itself; halting it then would play a click.
+        if halt && dev.activity()?.position.is_some() {
+            dev.halt_pad(pad)?;
+        }
+        Ok(())
+    })
+    .await
 }
 
 /// Whether each of the 160 pattern slots holds a pattern.

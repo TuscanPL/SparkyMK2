@@ -183,7 +183,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     <div class="toolbar">
       <input v-model="filter" class="search" placeholder="Search the library" />
       <div class="spacer" />
-      <button @click="pasteCode">Paste share code…</button>
+      <button title="Add a frame someone shared as a text code" @click="pasteCode">Paste share code…</button>
       <button @click="addFiles">Add files…</button>
       <button class="ghost" title="Read the library folder again" :disabled="store.library.loading" @click="loadLibrary">
         <Icon name="refresh" />
@@ -283,9 +283,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
           </div>
         </div>
         <div class="actions">
-          <button class="primary" :disabled="store.pending > 0" @click="applying = selected">Apply to projects…</button>
+          <button class="primary" :disabled="store.pending > 0" title="Write this to the screens of one or more projects" @click="applying = selected">Apply to projects…</button>
           <button @click="emit('edit', selected)">Open in the editor</button>
-          <button v-if="selected.kind === 'frame'" @click="share">Share code…</button>
+          <button v-if="selected.kind === 'frame'" title="Turn this frame into a short text code anyone can paste in" @click="share">Share code…</button>
           <button @click="exportFile">Save as file…</button>
           <button class="danger" @click="remove">Delete</button>
         </div>

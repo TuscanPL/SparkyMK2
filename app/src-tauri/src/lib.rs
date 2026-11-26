@@ -68,6 +68,8 @@ pub fn run() {
             edit::rename_sample,
             edit::pad_operation,
             edit::move_sample,
+            edit::set_bpm_on_pads,
+            edit::swap_banks,
             edit::import_audio,
             edit::import_from_device,
             edit::analyze_bpm,

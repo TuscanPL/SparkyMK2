@@ -306,7 +306,8 @@ export const api = {
   deviceActivity: () => invoke<Activity>("device_activity"),
   selectOnDevice: (pad: number) => invoke<void>("select_on_device", { pad }),
   previewStart: (pad: number) => invoke<void>("preview_start", { pad }),
-  previewStop: (pad: number) => invoke<void>("preview_stop", { pad }),
+  /** `halt` also cuts off a Gate-off pad that keeps sounding after the release. */
+  previewStop: (pad: number, halt = false) => invoke<void>("preview_stop", { pad, halt }),
   patterns: () => invoke<boolean[]>("patterns"),
   patternDetail: (slot: number) => invoke<PatternDetail>("pattern_detail", { slot }),
   screens: () => invoke<ScreenImages>("screens"),
@@ -331,6 +332,8 @@ export const api = {
     invoke<PadState>("pad_operation", { pad, operation }),
   moveSample: (from: number, to: number, exchange: boolean) =>
     invoke<void>("move_sample", { from, to, exchange }),
+  setBpmOnPads: (pads: number[], value: number) => invoke<number>("set_bpm_on_pads", { pads, value }),
+  swapBanks: (a: number, b: number) => invoke<void>("swap_banks", { a, b }),
   importAudio: (pad: number, path: string, detectBpm: boolean, bpmRange: number) =>
     invoke<ImportResult>("import_audio", { pad, path, detectBpm, bpmRange }),
   importFromDevice: (pad: number, volume: Volume, remote: string, detectBpm: boolean, bpmRange: number) =>

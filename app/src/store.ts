@@ -17,7 +17,7 @@ import {
   type Status,
   type Waveform,
 } from "./api";
-import { bankOf, bpm, padFromName, padLabel } from "./format";
+import { BANK_LETTERS, bankOf, bpm, padFromName, padLabel } from "./format";
 
 export type Tab = "samples" | "patterns" | "screens" | "files" | "settings";
 
@@ -45,7 +45,8 @@ interface Dialog {
 }
 
 const POLL_MS = 2000;
-const WAVE_POINTS = 2048;
+// Enough detail to zoom in on a loop point; one read gives every zoom level.
+const WAVE_POINTS = 16_384;
 const PREFS_KEY = "sparkymk2.prefs";
 
 const savedPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}");
@@ -85,6 +86,8 @@ export const store = reactive({
   selectedPad: null as number | null,
   /** The pad sounding on the device, from a hit on the unit or a preview, or null. */
   playingPad: null as number | null,
+  /** Frames the sounding pad had played at the last poll, and when (performance.now()). */
+  playPosition: null as { frames: number; at: number } | null,
   selectedPattern: null as number | null,
   detail: null as PadDetail | null,
   /** Bumped on every read-back, so controls rebuild from the device's values. */
@@ -245,6 +248,7 @@ function resetDevice() {
   window.clearTimeout(activityTimer);
   deviceSelected = null;
   store.playingPad = null;
+  store.playPosition = null;
   store.connected = false;
   store.status = null;
   store.projects = [];
@@ -718,7 +722,7 @@ export function handleError(e: unknown) {
 }
 
 /** How often the device is asked what it is doing, to follow pads hit on the unit. */
-const ACTIVITY_MS = 300;
+export const ACTIVITY_MS = 300;
 
 /**
  * Follow the unit: a pad hit there (or a bank chosen there, which selects its first pad)
@@ -731,8 +735,13 @@ async function followDevice() {
   if (!store.connected) return;
   const sent = selectionSent;
   try {
+    const asked = performance.now();
     const a = await api.deviceActivity();
     store.playingPad = a.position === null ? null : a.selectedPad;
+    // The unit read the position somewhere between asking and the answer: take the middle,
+    // so a slow answer does not make the playhead run ahead and then jump back.
+    const at = (asked + performance.now()) / 2;
+    store.playPosition = a.position === null ? null : { frames: a.position, at };
     // An answer that crossed a selection the app was sending may show it half done (the
     // bank set, the pad not yet); acting on it would bounce the selection back.
     const settled = sendingSelection === 0 && sent === selectionSent;
@@ -932,6 +941,63 @@ export async function moveSample(from: number, to: number) {
   } finally {
     delete store.working[from];
     delete store.working[to];
+  }
+}
+
+/** Give the BPM of pad `from` to every pad with a sample in its bank, or in the project. */
+export async function copyBpm(from: number) {
+  const value = store.pads[from]?.bpm;
+  if (!value) return;
+  const bank = Math.floor(from / 16);
+  const answer = await ask(
+    `Use ${bpm(value)} BPM for other pads?`,
+    `Sets the BPM of every pad with a sample, either in bank ${BANK_LETTERS[bank]} or in the whole project. Pads in protected banks are left alone.`,
+    [
+      { label: "Cancel", value: "cancel" },
+      { label: "Whole project", value: "project" },
+      { label: `Bank ${BANK_LETTERS[bank]}`, value: "bank", kind: "primary" },
+    ],
+  );
+  if (answer !== "bank" && answer !== "project") return;
+  const pads = store.pads
+    .filter((p) => p.hasSample && p.index !== from && (answer === "project" || Math.floor(p.index / 16) === bank))
+    .map((p) => p.index);
+  const set = await edit(() => api.setBpmOnPads(pads, value));
+  if (set === undefined) return;
+  await loadPads();
+  if (store.selectedPad !== null) await selectPad(store.selectedPad);
+  notify(`BPM set to ${bpm(value)} on ${set} pad${set === 1 ? "" : "s"}`, "info");
+}
+
+/** Swap the samples of two banks pad by pad; bank settings and patterns stay put. */
+export async function swapBanks(a: number, b: number) {
+  if (a === b) return;
+  const [la, lb] = [BANK_LETTERS[a], BANK_LETTERS[b]];
+  const ok = await confirmAction(
+    `Swap bank ${la} with bank ${lb}?`,
+    `${la}1 trades places with ${lb}1, ${la}2 with ${lb}2, and so on. Bank tempo and volume stay with their bank, and patterns keep playing the same pad numbers, so they will play the swapped sounds.`,
+    "Swap",
+  );
+  if (!ok) return;
+  for (let i = 0; i < 16; i++) {
+    store.working[a * 16 + i] = "Moving";
+    store.working[b * 16 + i] = "Moving";
+  }
+  try {
+    const done = await edit(async () => {
+      await api.swapBanks(a, b);
+      return true;
+    });
+    // Reload even after a failure: a swap stopped halfway has still moved some pads.
+    waveCache.clear();
+    await loadPads();
+    if (store.selectedPad !== null) await selectPad(store.selectedPad);
+    if (done) notify(`Banks ${la} and ${lb} swapped`, "info");
+  } finally {
+    for (let i = 0; i < 16; i++) {
+      delete store.working[a * 16 + i];
+      delete store.working[b * 16 + i];
+    }
   }
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { Param } from "../api";
-import { FLAG, PARAM_VIEW, bpm } from "../format";
+import { CHROMATIC_TIP, FLAG, PARAM_VIEW, bpm } from "../format";
 
 const props = defineProps<{ param: Param; disabled?: boolean }>();
 const emit = defineEmits<{ commit: [value: number] }>();
@@ -35,12 +35,12 @@ function commitBpm() {
   commit(value);
 }
 
-const chromatic = computed(() => props.param.value & (FLAG.chromaticA | FLAG.chromaticB));
+const chromatic = computed(() => props.param.value & (FLAG.legato | FLAG.poly));
 function setFlag(bit: number, on: boolean) {
   commit(on ? props.param.value | bit : props.param.value & ~bit);
 }
 function setChromatic(bits: number) {
-  commit((props.param.value & ~(FLAG.chromaticA | FLAG.chromaticB)) | bits);
+  commit((props.param.value & ~(FLAG.legato | FLAG.poly)) | bits);
 }
 </script>
 
@@ -48,7 +48,7 @@ function setChromatic(bits: number) {
   <!-- The trigger flags are two rows of their own, so every label lines up on the left
        and every control ends at the right edge. -->
   <template v-if="control.kind === 'flags'">
-    <div class="field">
+    <div class="field" :title="view?.tip">
       <span class="name">{{ view?.label ?? param.name }}</span>
       <div class="checks">
         <label class="check">
@@ -71,7 +71,7 @@ function setChromatic(bits: number) {
         </label>
       </div>
     </div>
-    <div class="field">
+    <div class="field" :title="CHROMATIC_TIP">
       <span class="name">Chromatic</span>
       <select
         :value="chromatic"
@@ -79,13 +79,13 @@ function setChromatic(bits: number) {
         @change="setChromatic(Number(($event.target as HTMLSelectElement).value))"
       >
         <option :value="0">Mono</option>
-        <option :value="FLAG.chromaticA">Mode 2</option>
-        <option :value="FLAG.chromaticB">Mode 3</option>
+        <option :value="FLAG.legato">Legato</option>
+        <option :value="FLAG.poly">Poly</option>
       </select>
     </div>
   </template>
 
-  <div v-else class="field" :class="`kind-${control.kind}`">
+  <div v-else class="field" :class="`kind-${control.kind}`" :title="view?.tip">
     <span class="name">{{ view?.label ?? param.name }}</span>
 
     <label v-if="control.kind === 'toggle'" class="switch">

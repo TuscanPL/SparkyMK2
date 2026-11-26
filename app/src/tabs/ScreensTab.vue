@@ -456,13 +456,13 @@ async function putBackOriginal() {
             </select>
           </label>
           <div class="tool-group">
-            <button :disabled="playing" @click="invertSelected">Invert</button>
-            <button :disabled="playing" @click="clear(0)">Clear</button>
-            <button :disabled="playing" @click="clear(1)">Fill</button>
+            <button :disabled="playing" title="Swap lit and unlit pixels in this frame" @click="invertSelected">Invert</button>
+            <button :disabled="playing" title="Turn every pixel off" @click="clear(0)">Clear</button>
+            <button :disabled="playing" title="Light every pixel" @click="clear(1)">Fill</button>
           </div>
           <div class="tool-group">
             <button :disabled="playing || !(undo[selected] ?? []).length" @click="undoOne">Undo</button>
-            <button :disabled="!dirty(selected)" @click="revert">Revert</button>
+            <button :disabled="!dirty(selected)" title="Drop this frame's unapplied changes and show what the device holds" @click="revert">Revert</button>
           </div>
         </div>
 
@@ -487,15 +487,15 @@ async function putBackOriginal() {
         <p v-else class="muted note">Drag to draw, right-drag to erase.</p>
 
         <div class="footer">
-          <button v-if="selectedInfo?.hasOriginal" :disabled="store.pending > 0" @click="putBackOriginal">
+          <button v-if="selectedInfo?.hasOriginal" :disabled="store.pending > 0" title="Write back the image this slot held before SparkyMK2 first changed it" @click="putBackOriginal">
             Put back the original
           </button>
           <p v-if="selectedInfo?.problem" class="problem">{{ selectedInfo.problem }}</p>
           <div class="spacer" />
-          <button v-if="changed.length > 1" :disabled="store.pending > 0" @click="apply(changed)">
+          <button v-if="changed.length > 1" :disabled="store.pending > 0" title="Write every changed frame to the device" @click="apply(changed)">
             Apply {{ changed.length }} changed
           </button>
-          <button class="primary" :disabled="!dirty(selected) || store.pending > 0" @click="apply([selected])">
+          <button class="primary" :disabled="!dirty(selected) || store.pending > 0" title="Write this frame to the device" @click="apply([selected])">
             Apply to project {{ store.status?.project }}
           </button>
         </div>
@@ -514,7 +514,7 @@ async function putBackOriginal() {
         <div class="label">Image</div>
         <div class="fields" :class="{ off: !sources[selected] }">
           <label class="field">
-            <span>Fit</span>
+            <span title="How the image fills the 128×64 screen">Fit</span>
             <select v-model="conversion.fit" :disabled="!sources[selected]">
               <option value="contain">Fit inside</option>
               <option value="cover">Fill and crop</option>
@@ -522,7 +522,7 @@ async function putBackOriginal() {
             </select>
           </label>
           <label class="field">
-            <span>Dither</span>
+            <span title="Patterns of dots that fake shades of grey on the two-colour screen. None gives hard edges.">Dither</span>
             <select v-model="conversion.dither" :disabled="!sources[selected]">
               <option value="none">None</option>
               <option value="floyd">Floyd–Steinberg</option>
@@ -537,7 +537,7 @@ async function putBackOriginal() {
             <span class="mono">{{ conversion.zoom.toFixed(2) }}×</span>
           </label>
           <label class="field slider">
-            <span>Threshold</span>
+            <span title="How bright a spot of the image must be for its pixel to light">Threshold</span>
             <input v-model.number="conversion.threshold" type="range" min="0" max="255" :disabled="!sources[selected]" />
             <span class="mono">{{ conversion.threshold }}</span>
           </label>
@@ -556,7 +556,7 @@ async function putBackOriginal() {
               <input v-model="conversion.invert" type="checkbox" :disabled="!sources[selected]" />
               Invert
             </label>
-            <button class="small" :disabled="!sources[selected]" @click="resetFraming">Recentre</button>
+            <button class="small" :disabled="!sources[selected]" title="Put the image back in the middle at its first zoom" @click="resetFraming">Recentre</button>
           </div>
         </div>
         <p v-if="!sources[selected]" class="hint muted">

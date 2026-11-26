@@ -256,6 +256,7 @@ const percent = computed(() => {
           :key="v.id"
           :class="{ active: volume === v.id }"
           :disabled="store.pending > 0"
+          :title="v.hint"
           @click="go('', v.id)"
         >
           {{ v.label }}
@@ -285,13 +286,14 @@ const percent = computed(() => {
     </div>
 
     <div class="tools">
-      <button class="primary" :disabled="store.pending > 0" @click="onUpload">
+      <button class="primary" :disabled="store.pending > 0" title="Copy files from this computer into the open folder" @click="onUpload">
         Copy to {{ volume === "card" ? "card" : "device" }}…
       </button>
       <button :disabled="store.pending > 0" @click="onNewFolder">New folder</button>
       <button
         :class="{ active: selected && preview.playing === selected.path }"
         :disabled="!selected || selected.isDir || !playable(selected.name)"
+        title="Play the selected sound through this computer's speakers"
         @click="selected && playPreview(volume, selected.path, selected.size)"
       >
         <span v-if="selected && preview.loading === selected.path" class="spinner" />

@@ -3,7 +3,7 @@
 // The protocol can only preview a pad, so anything else is decoded by the backend into a
 // WAV and played here, through the computer's speakers rather than the SP-404MKII.
 import { reactive } from "vue";
-import { api, errorText, type CardEntry, type Volume } from "./api";
+import { api, errorText, logLine, type CardEntry, type Volume } from "./api";
 import { notify } from "./store";
 
 /** Extensions the backend can turn into something playable; mirrors `files::playable`. */
@@ -94,7 +94,13 @@ function start(buffer: AudioBuffer, path: string, mine: number) {
   context ??= new AudioContext();
   // A context first made while preloading had no click behind it, and browsers start
   // those suspended; without this the first sound would play silently.
-  if (context.state === "suspended") void context.resume();
+  if (context.state === "suspended") {
+    context.resume().catch((e) => logLine("warn", `audio: resume failed: ${errorText(e)}`));
+  }
+  logLine(
+    "debug",
+    `audio: play ${path}, ${buffer.duration.toFixed(2)} s at ${buffer.sampleRate} Hz, context ${context.state} at ${context.sampleRate} Hz`,
+  );
   source = context.createBufferSource();
   source.buffer = buffer;
   source.connect(context.destination);
@@ -134,6 +140,7 @@ export async function playPreview(volume: Volume, path: string, size: number | n
     if (mine !== token) return;
     start(buffer, path, mine);
   } catch (e) {
+    logLine("warn", `audio: ${path} did not play: ${errorText(e)}`);
     if (mine === token) {
       preview.loading = null;
       preview.playing = null;
