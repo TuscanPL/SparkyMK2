@@ -1,17 +1,23 @@
 # Build the packages for a version tag and attach them to a draft GitHub release:
 # Linux (x86_64 and arm64), Windows and macOS.
 # Start it with scripts/release.sh X.Y.Z, then: git push origin main vX.Y.Z
+#
+# Run by hand (Actions > Release > Run workflow) it builds the same packages from the
+# chosen branch without making a release, and keeps them as the run's artifacts: a test
+# build for checking other systems before a release.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   notes:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       body: ${{ steps.notes.outputs.body }}
@@ -34,6 +40,7 @@ jobs:
 
   linux:
     needs: notes
+    if: ${{ !cancelled() && needs.notes.result != 'failure' }}
     # The oldest supported Ubuntu, so the AppImage and .deb run on older distributions too.
     # Built natively on each architecture: arm64 is for the Raspberry Pi 4/5 and other
     # 64-bit ARM boards (#15).
@@ -76,14 +83,29 @@ jobs:
           NO_STRIP: true
         with:
           projectPath: app
-          tagName: ${{ github.ref_name }}
-          releaseName: SparkyMK2 ${{ github.ref_name }}
+          tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && format('SparkyMK2 {0}', github.ref_name) || '' }}
           releaseBody: ${{ needs.notes.outputs.body }}
           releaseDraft: true
           args: --bundles deb,rpm,appimage
 
+      - name: Keep the test build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkymk2-${{ github.job }}-${{ runner.arch }}
+          if-no-files-found: error
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/dmg/*.dmg
+
   windows:
     needs: notes
+    if: ${{ !cancelled() && needs.notes.result != 'failure' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,14 +132,29 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: app
-          tagName: ${{ github.ref_name }}
-          releaseName: SparkyMK2 ${{ github.ref_name }}
+          tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && format('SparkyMK2 {0}', github.ref_name) || '' }}
           releaseBody: ${{ needs.notes.outputs.body }}
           releaseDraft: true
           args: --bundles msi,nsis
 
+      - name: Keep the test build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkymk2-${{ github.job }}-${{ runner.arch }}
+          if-no-files-found: error
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/dmg/*.dmg
+
   macos:
     needs: notes
+    if: ${{ !cancelled() && needs.notes.result != 'failure' }}
     # Apple Silicon; the DMG is arm64 only. macOS ships WebKit, so there is nothing to
     # install first.
     runs-on: macos-latest
@@ -148,8 +185,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: app
-          tagName: ${{ github.ref_name }}
-          releaseName: SparkyMK2 ${{ github.ref_name }}
+          tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && format('SparkyMK2 {0}', github.ref_name) || '' }}
           releaseBody: ${{ needs.notes.outputs.body }}
           releaseDraft: true
           args: --bundles dmg
+
+      - name: Keep the test build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkymk2-${{ github.job }}-${{ runner.arch }}
+          if-no-files-found: error
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/dmg/*.dmg
